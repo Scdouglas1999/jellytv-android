@@ -243,6 +243,10 @@ public sealed class DvrState
     [JsonPropertyName("rules")] public List<RecordingRule> Rules { get; set; } = new();
 
     [JsonPropertyName("jobs")] public List<RecordingJob> Jobs { get; set; } = new();
+
+    /// <summary>When the DVR created the recordings library by itself (the first finished recording without one). Set
+    /// once and never cleared: a library the owner removes afterwards is not created again.</summary>
+    [JsonPropertyName("libraryAutoCreatedAt")] public DateTimeOffset? LibraryAutoCreatedAt { get; set; }
 }
 
 /// <summary>A game's recording as the board shows it.</summary>
@@ -261,6 +265,9 @@ public sealed class GameRecording
     [JsonPropertyName("itemId")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ItemId { get; set; }
+
+    /// <summary>"ready", "adding" or "noLibrary" (see <see cref="RecordingLibrary"/>).</summary>
+    [JsonPropertyName("libraryState")] public string LibraryState { get; set; } = RecordingLibrary.NoLibrary;
 
     [JsonPropertyName("reason")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

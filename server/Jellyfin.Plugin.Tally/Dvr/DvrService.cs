@@ -59,6 +59,7 @@ public sealed class DvrService : IHostedService, IDisposable
     private volatile Dictionary<string, string> _carrying = new(StringComparer.Ordinal);
     private readonly SemaphoreSlim _wake = new(0);
     private readonly HashSet<Guid> _justResumed = new();
+    private readonly SemaphoreSlim _libraryGate = new(1, 1);
     private DvrStore? _store;
     private DvrState _state = new();
     private CancellationTokenSource? _cts;
@@ -151,6 +152,7 @@ public sealed class DvrService : IHostedService, IDisposable
     {
         _cts?.Dispose();
         _wake.Dispose();
+        _libraryGate.Dispose();
     }
 
     private void Wake()
@@ -819,6 +821,7 @@ public sealed class DvrService : IHostedService, IDisposable
         Save(force: true);
         _logger.LogInformation("JellyTV DVR: {Title}: done, {File} ({Size}), {How}", job.Game.Title, final, DvrSpace.Size(fileBytes), reason ?? note ?? "complete");
 
+        await EnsureLibraryAsync(job, final).ConfigureAwait(false);
         await ScanAsync(job, final, ct).ConfigureAwait(false);
         ApplyRetention();
     }
@@ -922,6 +925,50 @@ public sealed class DvrService : IHostedService, IDisposable
         catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
         {
             _logger.LogWarning("JellyTV DVR: {Title}: library scan failed: {Message}", job.Game.Title, ex.Message);
+        }
+    }
+
+    /// <summary>The first finished recording that no library covers creates the "Sports Recordings" library, once (see
+    /// <see cref="RecordingLibrary.AutoCreateOnceAsync"/>).</summary>
+    private async Task EnsureLibraryAsync(RecordingJob job, string file)
+    {
+        await _libraryGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            var name = await RecordingLibrary.AutoCreateOnceAsync(
+                () => CoveringLocation(file) != null,
+                () =>
+                {
+                    lock (_gate)
+                    {
+                        return _state.LibraryAutoCreatedAt;
+                    }
+                },
+                CreateLibraryAsync,
+                at =>
+                {
+                    lock (_gate)
+                    {
+                        _state.LibraryAutoCreatedAt = at;
+                        _dirty = true;
+                    }
+
+                    Save(force: true);
+                }).ConfigureAwait(false);
+            if (name != null)
+            {
+                _logger.LogInformation(
+                    "JellyTV DVR: {Title}: no library covered {Folder}, so the DVR created the library {Name} for recordings (once: if it is removed, it is not created again)",
+                    job.Game.Title, RecordingsFolder(), name);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
+        {
+            _logger.LogWarning("JellyTV DVR: {Title}: could not create the {Name} library: {Message}", job.Game.Title, LibraryName, ex.Message);
+        }
+        finally
+        {
+            _libraryGate.Release();
         }
     }
 
@@ -1374,7 +1421,11 @@ public sealed class DvrService : IHostedService, IDisposable
     }
 
     /// <summary>What the board shows for a game: its most relevant job.</summary>
-    public GameRecording? ForGame(string gameId, Func<Guid, string> startOverPath)
+    /// <param name="gameId">Scoreboard event id.</param>
+    /// <param name="startOverPath">Builds a job's signed start-over path.</param>
+    /// <param name="libraryState">The job's library state (<see cref="LibraryStates"/>, shared by one board's games);
+    /// null: looked up for this game alone.</param>
+    public GameRecording? ForGame(string gameId, Func<Guid, string> startOverPath, Func<RecordingJob, string>? libraryState = null)
     {
         RecordingJob? job;
         lock (_gate)
@@ -1391,12 +1442,14 @@ public sealed class DvrService : IHostedService, IDisposable
             return null;
         }
 
+        var itemId = ItemIdFor(job);
         return new GameRecording
         {
             State = job.State,
             JobId = job.Id.ToString("N"),
             StartOverPath = job.State == JobState.Recording && job.Segments > 0 ? startOverPath(job.Id) : null,
-            ItemId = ItemIdFor(job),
+            ItemId = itemId,
+            LibraryState = itemId != null ? RecordingLibrary.Ready : libraryState?.Invoke(job) ?? RecordingLibrary.State(null, IsCovered(job)),
             Reason = job.Reason
         };
     }
@@ -1467,6 +1520,39 @@ public sealed class DvrService : IHostedService, IDisposable
 
     /// <summary>The Jellyfin library whose folders include the recordings folder, if any.</summary>
     public string? CoveringLibrary() => Covering(RecordingsFolder())?.Library;
+
+    /// <summary>Whether the DVR once created the recordings library by itself.</summary>
+    public DateTimeOffset? LibraryAutoCreatedAt
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _state.LibraryAutoCreatedAt;
+            }
+        }
+    }
+
+    /// <summary>Whether a library covers the job's file (its planned place in the recordings folder until it has one).</summary>
+    public bool IsCovered(RecordingJob job) => CoveringLocation(string.IsNullOrEmpty(job.FilePath) ? RecordingsFolder() : job.FilePath) != null;
+
+    /// <summary>"ready", "adding" or "noLibrary" for each job, reading Jellyfin's libraries once.</summary>
+    public Func<RecordingJob, string> LibraryStates()
+    {
+        var locations = _library.GetVirtualFolders().SelectMany(vf => vf.Locations ?? Array.Empty<string>()).Select(Normalize).ToList();
+        var folder = RecordingsFolder();
+        return job =>
+        {
+            if (!string.IsNullOrEmpty(job.ItemId))
+            {
+                return RecordingLibrary.Ready;
+            }
+
+            var p = Normalize(string.IsNullOrEmpty(job.FilePath) ? folder : job.FilePath);
+            var covered = locations.Any(l => p.Equals(l, PathComparison) || p.StartsWith(l + Path.DirectorySeparatorChar, PathComparison));
+            return RecordingLibrary.State(null, covered);
+        };
+    }
 
     /// <summary>The library folder (one of a library's locations) that holds <paramref name="path"/>, if any.</summary>
     private string? CoveringLocation(string path) => Covering(path)?.Location;
