@@ -4,14 +4,16 @@
  *  - Moving the pointer onto something focusable focuses it (the amber frame follows the pointer), as the arrow keys
  *    would; the frame stays where it is when the pointer leaves (the next arrow key starts from there).
  *  - A click is OK on what is under the pointer. webOS may also send OK's key (13) for the same press: an OK key
- *    just before the click means the key router already did it, so the click is dropped.
+ *    just before the click means the key router already did it, so the click is dropped. Focus can scroll a row or
+ *    a page (as on Android TV), moving what the pointer just focused away from under it: a click where it was when
+ *    it was focused still means it.
  *  - The wheel steps focus up and down, one row per notch (lists scroll in the wheel's direction).
  *  - `cursorStateChange` (detail.visibility, webOS 2+; the system-ui-visibility guide) says whether the pointer is
  *    showing: `html.pointer-mode` while it is. An arrow key hides it (the TV switches to 5-way mode).
  * Everything goes through the key router as the remote's own keys would (synthetic key events), so dialogs, the
  * players and HOLD handling see a click exactly as an OK press.
  */
-import { currentFocusKey, focusKeyAt, setFocus } from '../focus/focus';
+import { currentFocusKey, focusKeyAt, focusableAt, setFocus } from '../focus/focus';
 
 /** A click this soon after an OK key is the same press (webOS sends both on some models). */
 const CLICK_AFTER_KEY_MS = 400;
@@ -49,6 +51,8 @@ export function installPointer(options: PointerOptions = {}): () => void {
   let lastOkKey = -Infinity;
   let lastWheel = -Infinity;
   let synthetic = false;
+  /** What the pointer focused last, and where it was then (canvas pixels). */
+  let hovered: { key: string; el: Element; rect: { left: number; top: number; right: number; bottom: number } } | null = null;
 
   const onCursor = (e: Event): void => {
     const detail = (e as CustomEvent<{ visibility?: boolean }>).detail;
@@ -61,8 +65,23 @@ export function installPointer(options: PointerOptions = {}): () => void {
     lastX = e.clientX;
     lastY = e.clientY;
     setPointerMode(true);
+    const at = focusableAt(e.target as Element | null);
+    if (at === null || at.key === currentFocusKey()) return;
+    const r = at.node.getBoundingClientRect();
+    hovered = { key: at.key, el: at.node, rect: { left: r.left, top: r.top, right: r.right, bottom: r.bottom } };
+    setFocus(at.key);
+  };
+
+  /** What a click at (x, y) means: the focusable under it, or the one focused there before focus scrolled it away. */
+  const clicked = (e: MouseEvent): string | null => {
     const key = focusKeyAt(e.target as Element | null);
-    if (key !== null && key !== currentFocusKey()) setFocus(key);
+    if (key !== null) return key;
+    if (hovered === null || hovered.key !== currentFocusKey()) return null;
+    const { rect } = hovered;
+    const inside = e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom;
+    const now = hovered.el.getBoundingClientRect();
+    const moved = now.left !== rect.left || now.top !== rect.top;
+    return inside && moved ? hovered.key : null;
   };
 
   const onKey = (e: KeyboardEvent): void => {
@@ -72,7 +91,7 @@ export function installPointer(options: PointerOptions = {}): () => void {
   };
 
   const onClick = (e: MouseEvent): void => {
-    const key = focusKeyAt(e.target as Element | null);
+    const key = clicked(e);
     if (key === null) return;
     e.preventDefault();
     if (now() - lastOkKey < CLICK_AFTER_KEY_MS) return;

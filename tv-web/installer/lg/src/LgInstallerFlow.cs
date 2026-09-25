@@ -200,8 +200,7 @@ public sealed class LgInstallerFlow(Ui ui, LgOptions options, HttpClient http, K
             if (found.Count == 0)
             {
                 ui.Say("No LG TV answered. That is normal while the TV is off or Developer Mode is not on yet " +
-                       "(INSTALL-LG.md, step 2). You can also type the TV's IP address (on the TV: Settings > General > " +
-                       "Network > Wi-Fi Connection (or Wired Connection) > Advanced Wi-Fi Settings).");
+                       "(INSTALL-LG.md, step 2). You can also type the TV's IP address: the Developer Mode app shows it.");
             }
             else
             {

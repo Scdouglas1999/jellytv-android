@@ -88,9 +88,14 @@ const childCount: Record<string, number> = {};
  * gap must not jump to the row's remembered card). Null over anything else.
  */
 export function focusKeyAt(el: Element | null): string | null {
+  return focusableAt(el)?.key ?? null;
+}
+
+/** `focusKeyAt` with the element that registered it. */
+export function focusableAt(el: Element | null): { key: string; node: Element } | null {
   for (let node: Element | null = el; node !== null; node = node.parentElement) {
     const key = nodeKeys.get(node);
-    if (key !== undefined) return (childCount[key] ?? 0) > 0 ? null : key;
+    if (key !== undefined) return (childCount[key] ?? 0) > 0 ? null : { key, node };
   }
   return null;
 }
