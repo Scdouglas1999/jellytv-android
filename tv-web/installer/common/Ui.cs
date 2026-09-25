@@ -1,4 +1,4 @@
-namespace Tally.SamsungInstaller;
+namespace Tally.Installer;
 
 /// <summary>
 /// The console the person sees: plain sentences, numbered steps, one question at a time, the amber of Tally for
