@@ -1,0 +1,54 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- "Tally for LG": one self-contained program per OS that installs the Tally TV shell (an .ipk it builds itself) on
+       an LG TV (webOS 5+, 2020 on) in Developer Mode. It finds the TV, fetches and unlocks the TV's SSH key, copies the
+       package over SSH and installs and starts it through the TV's own services, as LG's ares-install and ares-launch
+       do, and stamps the Developer Mode session into the shell so the Tally plugin can keep Developer Mode on. No LG
+       tools, Node.js or Java. Shares its console, server step and scan with Tally for Samsung (../../common).
+       Build: ../../build.sh lg (all four targets) -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <AssemblyName>Tally-LG-Installer</AssemblyName>
+    <RootNamespace>Tally.LgInstaller</RootNamespace>
+    <Product>Tally for LG</Product>
+    <Version>1.0.0</Version>
+    <ApplicationIcon>../../src/tally.ico</ApplicationIcon>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <DebugType>embedded</DebugType>
+    <CETCompat>false</CETCompat>
+    <SelfContained Condition="'$(RuntimeIdentifier)' != ''">true</SelfContained>
+    <PublishSingleFile Condition="'$(RuntimeIdentifier)' != ''">true</PublishSingleFile>
+    <EnableCompressionInSingleFile Condition="'$(RuntimeIdentifier)' != ''">true</EnableCompressionInSingleFile>
+    <PublishTrimmed Condition="'$(RuntimeIdentifier)' != ''">true</PublishTrimmed>
+    <TrimMode>partial</TrimMode>
+    <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+    <TvWebDir>$(MSBuildThisFileDirectory)../../../</TvWebDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Tally.LgInstaller.Tests" />
+    <ProjectReference Include="../../common/Tally.Installer.Common.csproj" />
+    <Using Include="Tally.Installer" />
+    <!-- SSH and SFTP to the TV's Developer Mode (port 9922, user prisoner). MIT; pinned. -->
+    <PackageReference Include="SSH.NET" Version="2026.0.0" />
+  </ItemGroup>
+
+  <!-- The TV shell, straight from tv-web/shell (the same files scripts/package-webos.sh packs) -->
+  <ItemGroup>
+    <EmbeddedResource Include="$(TvWebDir)shell/index.html" LogicalName="shell/index.html" />
+    <EmbeddedResource Include="$(TvWebDir)shell/shell.js" LogicalName="shell/shell.js" />
+    <EmbeddedResource Include="$(TvWebDir)shell/shell.css" LogicalName="shell/shell.css" />
+    <EmbeddedResource Include="$(TvWebDir)shell/fonts/*.woff2" LogicalName="shell/fonts/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="$(TvWebDir)../IBM-PLEX-OFL.txt" LogicalName="shell/fonts/OFL.txt" />
+    <EmbeddedResource Include="$(TvWebDir)shell/icons/icon-80.png" LogicalName="shell/icon-80.png" />
+    <EmbeddedResource Include="$(TvWebDir)shell/icons/icon-130.png" LogicalName="shell/icon-130.png" />
+    <EmbeddedResource Include="$(TvWebDir)shell/webos/appinfo.json" LogicalName="shell/appinfo.json" />
+    <EmbeddedResource Include="$(TvWebDir)package.json" LogicalName="package.json" />
+    <EmbeddedResource Include="NOTICE.txt" LogicalName="NOTICE.txt" />
+  </ItemGroup>
+
+</Project>
