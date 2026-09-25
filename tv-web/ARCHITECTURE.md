@@ -732,7 +732,18 @@ Proposed parallel tasks after tvweb-0: `tvweb-details` (4), `tvweb-library` (3),
 - **webOS runtimes**: LG's **webOS TV Emulator** exists only for webOS 1.2-6.0 ("From webOS TV 22, Emulator will not
   be provided"), as a VirtualBox VM (a 1.3-1.5 GB zip: a monolithic sparse VMDK, Yocto qemux86, IDE, e1000, VMSVGA;
   SSH 6622 → 22 as `developer`); this host has no VirtualBox and no root. The **webOS TV Simulator** (Electron,
-  Chromium 79 for 6.0; 22-26 builds too) runs without root: see the tvweb-webos report for what was run in it.
+  Chromium 79 for 6.0; 22-26 builds too) runs without root. **Run in LG's webOS 6.0 Simulator 1.4.1**
+  (tvweb-webos, September 25, 2026; `scripts/webos-simulator.sh`, driven over its DevTools port): the shell as Tally
+  for LG installs it loaded the bundle from a server, Quick Connect signed in, Home drew (the simulator zooms the
+  1920x1080 page into a 1280x720 window), LG's `webOSSystem.deviceInfo` and `PalmServiceBridge` were the simulator's own, the
+  panel came from its `getConfigs` (FHD, no HDR: the Full HD profile), the arrow keys, BACK 461 (the drawer, then
+  `platformBack` bringing LG's "Do you want to exit the app?"), the Magic Remote's hover, wheel and click, and a
+  film played straight from its MKV with the app's subtitles. The screensaver service is not in the simulator
+  ("Service does not exist: com.webos.service.tvpower"; the app carries on). It found two bugs, both fixed:
+  deviceInfo's `platformVersion` is the firmware's number ("02.00.94"), so the version now comes from `sdkVersion`
+  or the web engine; a click opened a page twice (the kit's `onClick` for desktop mice acted as well as the
+  pointer's OK), so the pointer's click now stops there. It is not LG's media pipeline (Electron's own decoders) and
+  has no `audioTracks`.
 
 ## 13. Feature parity with the Android TV app
 
