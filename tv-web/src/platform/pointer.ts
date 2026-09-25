@@ -3,8 +3,10 @@
  * its RemoteControl sample): the remote is in pointer mode or in 5-way mode, and the app follows.
  *  - Moving the pointer onto something focusable focuses it (the amber frame follows the pointer), as the arrow keys
  *    would; the frame stays where it is when the pointer leaves (the next arrow key starts from there).
- *  - A click is OK on what is under the pointer. webOS may also send OK's key (13) for the same press: an OK key
- *    just before the click means the key router already did it, so the click is dropped. Focus can scroll a row or
+ *  - A click is OK on what is under the pointer, and only that (the click stops here: the kit's onClick handlers,
+ *    for desktop mice, would act a second time; LG's simulator showed the page opening twice). webOS may also send
+ *    OK's key (13) for the same press: an OK key just before the click means the key router already did it, so the
+ *    click is dropped. Focus can scroll a row or
  *    a page (as on Android TV), moving what the pointer just focused away from under it: a click where it was when
  *    it was focused still means it.
  *  - The wheel steps focus up and down, one row per notch (lists scroll in the wheel's direction).
@@ -93,7 +95,9 @@ export function installPointer(options: PointerOptions = {}): () => void {
   const onClick = (e: MouseEvent): void => {
     const key = clicked(e);
     if (key === null) return;
+    // the click is OK here and nowhere else: the kit's own onClick (for desktop mice) would open the page again
     e.preventDefault();
+    e.stopPropagation();
     if (now() - lastOkKey < CLICK_AFTER_KEY_MS) return;
     if (key !== currentFocusKey()) setFocus(key);
     synthetic = true;

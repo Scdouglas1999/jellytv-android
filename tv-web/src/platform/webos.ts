@@ -1,8 +1,8 @@
 /**
  * The parts of LG webOS TV this app uses, called directly (LG's webOSTV.js library is not loaded; what it does is
  * small and documented):
- *  - `webOSSystem` (webOS 5+; `PalmSystem` before): `deviceInfo` (a JSON string: modelName, platformVersion,
- *    platformVersionMajor…), `launchParams`, `activate()`, `platformBack()`
+ *  - `webOSSystem` (webOS 5+; `PalmSystem` before): `deviceInfo` (a JSON string: modelName, sdkVersion,
+ *    platformVersion…), `launchParams`, `activate()`, `platformBack()`
  *    (webostv.developer.lge.com/develop/guides/app-lifecycle-management; the fields as webOS OSE's Chromium builds
  *    them, webosose/chromium108 platform_system_delegate_webos.cc);
  *  - Luna services through `PalmServiceBridge` (as webOSTV.js 1.2.11's `webOS.service.request` and Enact's
@@ -42,17 +42,19 @@ export function webosSystem(): WebosSystem | undefined {
 
 export interface WebosDeviceInfo {
   modelName: string;
-  /** The TV's own version numbering (5.x, 6.x, then 7.x for webOS 22 … 10.x for webOS 25). */
-  platformVersionMajor: number;
+  /** The webOS SDK version the TV reports ("6.0.0"; 7.x for webOS 22 … 10.x for webOS 25), '' when it does not. */
+  sdkVersion: string;
 }
 
 export function readDeviceInfo(system: WebosSystem | undefined = webosSystem()): WebosDeviceInfo {
   try {
     const info = JSON.parse(system?.deviceInfo ?? '{}') as Record<string, unknown>;
-    const major = Number(info.platformVersionMajor ?? String(info.platformVersion ?? '').split('.')[0]);
-    return { modelName: typeof info.modelName === 'string' ? info.modelName : '', platformVersionMajor: isFinite(major) ? major : 0 };
+    return {
+      modelName: typeof info.modelName === 'string' ? info.modelName : '',
+      sdkVersion: typeof info.sdkVersion === 'string' ? info.sdkVersion : '',
+    };
   } catch {
-    return { modelName: '', platformVersionMajor: 0 };
+    return { modelName: '', sdkVersion: '' };
   }
 }
 
@@ -73,11 +75,12 @@ export function webosVersionFromUserAgent(ua: string): number {
 }
 
 /**
- * The webOS version as LG names it (5, 6, 22, 23, 24, 25): from the TV's platform version (internal 7 = webOS 22,
- * so + 15 from 7 on; forum.webostv.developer.lge.com/t/740: a 2022 set reports 7.2.0), else from the web engine.
+ * The webOS version as LG names it (5, 6, 22, 23, 24, 25): the TV's SDK version (it counts 7 for webOS 22, so + 15
+ * from 7 on; forum.webostv.developer.lge.com/t/740), else the web engine. Not deviceInfo's `platformVersion`: that
+ * is the firmware's number (LG's webOS 6.0 simulator reports "02.00.94" there, "6.0.0" as sdkVersion).
  */
 export function webosVersion(info: WebosDeviceInfo, ua: string): number {
-  const major = info.platformVersionMajor;
+  const major = parseInt(info.sdkVersion.split('.')[0] ?? '', 10);
   if (major >= 7) return major + 15;
   if (major >= 3) return major;
   return webosVersionFromUserAgent(ua);

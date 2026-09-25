@@ -43,7 +43,7 @@ async function asWebos(page: Page, shell: boolean): Promise<void> {
       const fake: WebosFake = { luna: [], activated: 0, back: 0, screenSaver: null };
       w.__webos = fake;
       w.webOSSystem = {
-        deviceInfo: JSON.stringify({ modelName: 'OLED55CX9LA', platformVersion: '5.2.0', platformVersionMajor: 5, screenWidth: 1920, screenHeight: 1080 }),
+        deviceInfo: JSON.stringify({ modelName: 'OLED55CX9LA', platformVersion: '04.20.55', platformVersionMajor: 4, sdkVersion: '5.2.0', screenWidth: 1920, screenHeight: 1080 }),
         launchParams: '{}',
         activate: () => void fake.activated++,
         platformBack: () => void fake.back++,
@@ -323,9 +323,20 @@ test('webOS: the Magic Remote pointer: hover focuses, click is OK, the wheel ste
   await page.mouse.click(at.x, at.y);
   await expect.poll(stack).toBe(depth + 1);
   await page.waitForTimeout(800);
+  expect(await stack()).toBe(depth + 1); // once: the card's own onClick does not act a second time
   await shot(page, info, 'webos-pointer-click');
   await lgKey(page, BACK);
   await expect(page.locator('.page:not(.hidden) .home')).toBeVisible();
+  // the card is in place now: a click lands on it, and opens it once (not again through the card's own onClick)
+  await page.waitForTimeout(600);
+  at = await center(card);
+  await page.mouse.move(at.x + 1, at.y, { steps: 2 });
+  await page.mouse.click(at.x + 1, at.y);
+  await page.waitForTimeout(800);
+  expect(await stack()).toBe(depth + 1);
+  await lgKey(page, BACK);
+  await expect(page.locator('.page:not(.hidden) .home')).toBeVisible();
+  await page.waitForTimeout(600);
   // webOS sends OK's key too on some models: a click right after the key is the same press (one page, not two)
   at = await center(card);
   await page.mouse.move(at.x + 2, at.y, { steps: 2 });

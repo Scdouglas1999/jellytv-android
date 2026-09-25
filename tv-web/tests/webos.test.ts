@@ -61,18 +61,20 @@ describe('webOS version', () => {
     expect(webosVersionFromUserAgent('Mozilla/5.0 (X11; Linux x86_64) Chrome/140.0 Safari/537.36')).toBe(0);
   });
 
-  it('prefers the TV’s platform version, which counts 7 for webOS 22', () => {
-    expect(webosVersion({ modelName: 'OLED55C2', platformVersionMajor: 7 }, ua('87.0'))).toBe(22);
-    expect(webosVersion({ modelName: 'OLED55C4', platformVersionMajor: 10 }, ua('94.0'))).toBe(25);
-    expect(webosVersion({ modelName: 'OLED55CX', platformVersionMajor: 5 }, '')).toBe(5);
-    expect(webosVersion({ modelName: '', platformVersionMajor: 0 }, ua('79.0'))).toBe(6);
+  it('prefers the TV’s SDK version, which counts 7 for webOS 22, over the web engine', () => {
+    expect(webosVersion({ modelName: 'OLED55C2', sdkVersion: '7.2.0' }, ua('87.0'))).toBe(22);
+    expect(webosVersion({ modelName: 'OLED55C4', sdkVersion: '10.1.0' }, ua('94.0'))).toBe(25);
+    expect(webosVersion({ modelName: 'OLED55CX', sdkVersion: '5.2.0' }, '')).toBe(5);
+    expect(webosVersion({ modelName: '', sdkVersion: '' }, ua('79.0'))).toBe(6);
   });
 
-  it('reads webOSSystem.deviceInfo', () => {
-    const info = readDeviceInfo({ deviceInfo: JSON.stringify({ modelName: 'OLED55CX9LA', platformVersion: '5.2.0', platformVersionMajor: 5 }) });
-    expect(info).toEqual({ modelName: 'OLED55CX9LA', platformVersionMajor: 5 });
-    expect(readDeviceInfo({ deviceInfo: 'not json' })).toEqual({ modelName: '', platformVersionMajor: 0 });
-    expect(readDeviceInfo(undefined)).toEqual({ modelName: '', platformVersionMajor: 0 });
+  it('reads webOSSystem.deviceInfo as LG’s webOS 6.0 simulator gives it (platformVersion is the firmware’s)', () => {
+    const simulator = '{"modelName":"WEBOS6.0_SIMULATOR","platformVersion":"02.00.94","platformVersionMajor":2,"platformVersionMinor":0,"platformVersionDot":94,"sdkVersion":"6.0.0","screenWidth":1920,"screenHeight":1080}';
+    const info = readDeviceInfo({ deviceInfo: simulator });
+    expect(info).toEqual({ modelName: 'WEBOS6.0_SIMULATOR', sdkVersion: '6.0.0' });
+    expect(webosVersion(info, ua('79.0.3945.79'))).toBe(6);
+    expect(readDeviceInfo({ deviceInfo: 'not json' })).toEqual({ modelName: '', sdkVersion: '' });
+    expect(readDeviceInfo(undefined)).toEqual({ modelName: '', sdkVersion: '' });
   });
 });
 

@@ -23,7 +23,7 @@ case "${1:-}" in
     Xvfb "$DISPLAY_NO" -screen 0 2560x1600x24 -nolisten tcp >"$RUN/xvfb.log" 2>&1 &
     echo $! >"$RUN/xvfb.pid"
     sleep 1
-    DISPLAY="$DISPLAY_NO" "$SIMULATOR" "$PWD/dist/webos" '{}' --no-sandbox --remote-debugging-port="$CDP_PORT" \
+    DISPLAY="$DISPLAY_NO" APPDIR="$(dirname "$SIMULATOR")" "$SIMULATOR" "$PWD/dist/webos" '{}' --no-sandbox --remote-debugging-port="$CDP_PORT" \
       >"$RUN/simulator.log" 2>&1 &
     echo $! >"$RUN/simulator.pid"
     echo "simulator on $DISPLAY_NO, DevTools on 127.0.0.1:$CDP_PORT, log $RUN/simulator.log"
