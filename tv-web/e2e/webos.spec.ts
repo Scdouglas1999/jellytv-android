@@ -153,7 +153,10 @@ test('webOS: the platform, LG remote keys, the device profile for a UHD webOS 5 
   await lgKey(page, BACK);
   await expect(page.locator('.page:not(.hidden) .home')).toBeVisible();
 
-  // BACK on Home opens the drawer; BACK in the open drawer leaves through LG's platformBack
+  // BACK on Home opens the drawer; BACK in the open drawer leaves through LG's platformBack (once Home has its
+  // focus back: a person's next press comes long after the page change)
+  await expect(page.locator('.page:not(.hidden) .home [data-focused]')).toBeVisible();
+  await page.waitForTimeout(400);
   await lgKey(page, BACK);
   await expect(page.locator('.rail.open')).toBeVisible();
   await lgKey(page, BACK);
@@ -403,6 +406,8 @@ test('webOS: the installed shell loads the bundle from the server, relaunch brin
   await page.evaluate(() => document.dispatchEvent(new CustomEvent('webOSRelaunch', { detail: {} })));
   await expect.poll(async () => (await fake(page)).activated).toBe(1);
   // BACK on Home opens the drawer, BACK in the drawer leaves through the shell's exit: LG's platformBack
+  await expect(page.locator('.page:not(.hidden) .home [data-focused]')).toBeVisible();
+  await page.waitForTimeout(400);
   await lgKey(page, BACK);
   await expect(page.locator('.rail.open')).toBeVisible();
   await lgKey(page, BACK);
