@@ -121,6 +121,7 @@ public sealed class DvrService : IHostedService, IDisposable
         }
 
         _library.ItemAdded += OnItemAdded;
+        _library.ItemRemoved += OnItemRemoved;
         _cts = new CancellationTokenSource();
         _loop = Task.Run(() => LoopAsync(_cts.Token), CancellationToken.None);
         return Task.CompletedTask;
@@ -129,6 +130,7 @@ public sealed class DvrService : IHostedService, IDisposable
     public async Task StopAsync(CancellationToken cancellationToken)
     {
         _library.ItemAdded -= OnItemAdded;
+        _library.ItemRemoved -= OnItemRemoved;
         _cts?.Cancel();
         // recordings are left "recording" on purpose: they pick up where they were after the restart
         var tasks = _active.Values.Select(a => a.Task).Where(t => t != null).Cast<Task>().ToList();
@@ -1045,6 +1047,37 @@ public sealed class DvrService : IHostedService, IDisposable
         }
     }
 
+    /// <summary>Jellyfin removed an item (its library was removed, or the item deleted): a recording that was that item
+    /// is no longer in the library, so apps are not handed an item that is gone.</summary>
+    private void OnItemRemoved(object? sender, ItemChangeEventArgs e)
+    {
+        try
+        {
+            var id = e.Item?.Id.ToString("N");
+            if (id == null)
+            {
+                return;
+            }
+
+            RecordingJob? job;
+            lock (_gate)
+            {
+                job = _state.Jobs.FirstOrDefault(j => j.ItemId == id);
+            }
+
+            if (job != null)
+            {
+                Update(job, j => j.ItemId = null);
+                Save(force: true);
+                _logger.LogInformation("JellyTV DVR: {Title}: its library item {Item} was removed", job.Game.Title, id);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "JellyTV DVR: looking up a removed item failed");
+        }
+    }
+
     /// <summary>Finished recordings without a library item look for it again (a library made or a scan run since).</summary>
     private void LookUpLibraryItems()
     {
@@ -1543,14 +1576,9 @@ public sealed class DvrService : IHostedService, IDisposable
         var folder = RecordingsFolder();
         return job =>
         {
-            if (!string.IsNullOrEmpty(job.ItemId))
-            {
-                return RecordingLibrary.Ready;
-            }
-
             var p = Normalize(string.IsNullOrEmpty(job.FilePath) ? folder : job.FilePath);
             var covered = locations.Any(l => p.Equals(l, PathComparison) || p.StartsWith(l + Path.DirectorySeparatorChar, PathComparison));
-            return RecordingLibrary.State(null, covered);
+            return RecordingLibrary.State(job.ItemId, covered);
         };
     }
 
