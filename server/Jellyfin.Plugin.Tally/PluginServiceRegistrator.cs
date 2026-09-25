@@ -74,5 +74,10 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         services.AddHostedService<LiveTvRegistrationService>();
         services.AddHostedService<LiveCardRefreshService>();
         services.AddHostedService<PluginRepositoryService>();
+
+        // LG TVs: keeps Developer Mode on for the TVs Tally for LG installed Tally on
+        services.AddSingleton(sp => new LgDevModeService(
+            sp.GetRequiredService<IHttpClientFactory>(), sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<LgDevModeService>>()));
+        services.AddHostedService(sp => sp.GetRequiredService<LgDevModeService>());
     }
 }

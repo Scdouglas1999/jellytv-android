@@ -1323,6 +1323,7 @@ async function renderSettings(content) {
           </div>
         </div>
       </div>
+      ${lgDevModeLine()}
     </div>
 
     <div id="jtv-dvr"></div>
@@ -1350,6 +1351,17 @@ async function renderSettings(content) {
 
   renderDvr($('#jtv-dvr', content), isAdmin, true);
   if (isAdmin) renderAdmin($('#jtv-admin', content), true);
+}
+
+// LG TVs installed with Tally for LG: this server keeps their Developer Mode on (LgDevModeService).
+function lgDevModeLine() {
+  const lg = state.status && state.status.lgDevMode;
+  if (!lg || !lg.tvs) return '';
+  const tvs = lg.tvs === 1 ? '1 TV' : lg.tvs + ' TVs';
+  const when = lg.renewedAt ? ' · renewed ' + (new Date(lg.renewedAt).toDateString() === new Date().toDateString()
+    ? fmtTime(lg.renewedAt) : fmtWhen(lg.renewedAt)) : ' · renewing…';
+  const problem = lg.failing ? `<div class="set-note">Renewing failed for ${lg.failing === 1 ? '1 TV' : lg.failing + ' TVs'}${lg.lastError ? ': ' + esc(lg.lastError) : ''}. Open Developer Mode on the TV and check that it is on and signed in.</div>` : '';
+  return `<div class="set-note" id="lg-devmode">LG Developer Mode kept on for ${esc(tvs + when)}</div>${problem}`;
 }
 
 // The install page as the server says friends should reach it (its configured public address, else this one).
