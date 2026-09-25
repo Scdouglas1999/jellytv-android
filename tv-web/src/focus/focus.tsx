@@ -79,6 +79,22 @@ export function focusExists(focusKey: string): boolean {
 
 const ParentKey = createContext<string>('SN:ROOT');
 
+/** Which focusable an element is (for a pointer: the Magic Remote on LG) and which keys have children (groups). */
+const nodeKeys = new WeakMap<Element, string>();
+const childCount: Record<string, number> = {};
+
+/**
+ * The focusable a pointer is over: the nearest registered element from `el` up that is not a group (hovering a row's
+ * gap must not jump to the row's remembered card). Null over anything else.
+ */
+export function focusKeyAt(el: Element | null): string | null {
+  for (let node: Element | null = el; node !== null; node = node.parentElement) {
+    const key = nodeKeys.get(node);
+    if (key !== undefined) return (childCount[key] ?? 0) > 0 ? null : key;
+  }
+  return null;
+}
+
 let generated = 0;
 
 export interface FocusableOptions {
@@ -130,6 +146,8 @@ export function useFocusable<T extends HTMLElement = HTMLDivElement>(options: Fo
     const node = ref.current;
     if (node === null) return undefined;
     if (!node.hasAttribute('tabindex') && node.tagName !== 'INPUT') node.setAttribute('tabindex', '-1');
+    nodeKeys.set(node, focusKey);
+    childCount[parentFocusKey] = (childCount[parentFocusKey] ?? 0) + 1;
     SpatialNavigation.addFocusable({
       focusKey,
       node,
@@ -155,7 +173,10 @@ export function useFocusable<T extends HTMLElement = HTMLDivElement>(options: Fo
       forceFocus: false,
       focusable: options.focusable ?? true,
     });
-    return () => SpatialNavigation.removeFocusable({ focusKey });
+    return () => {
+      childCount[parentFocusKey] = (childCount[parentFocusKey] ?? 1) - 1;
+      SpatialNavigation.removeFocusable({ focusKey });
+    };
     // registration is per key (and parent); option changes go through updateFocusable below
   }, [focusKey, parentFocusKey]);
 
