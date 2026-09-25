@@ -5,7 +5,9 @@ import { isLive, type TallyBoard, type TallyEvent, type TallyGame } from '../../
 import type { PageProps } from '../../app/page';
 import { currentFocusKey, setFocus } from '../../focus/focus';
 import { IndicatorSquare } from '../../kit/Bits';
+import { Button } from '../../kit/Button';
 import { ToastHost } from '../../kit/Toast';
+import { RecordingNoticeHost } from '../sports/RecordingNotice';
 import { useKeyHandler } from '../../platform/keyRouter';
 import { back, replace, type Route } from '../../router/router';
 import { boardRows, gameForChannel } from '../../sports/boardOrganizer';
@@ -20,8 +22,6 @@ import { BoxScoreOverlay, EventBanner, GameSwitcher, ScoreBug, switcherKey } fro
 import { TuneIn, useEngine } from './playerKit';
 
 const BAR_MS = 5000;
-/** The score bug stays this long after it was brought back (a change, a key). */
-const BUG_LINGER_MS = 8000;
 /** The box score closes itself after this long without a key. */
 const BOX_SCORE_LINGER_MS = 12_000;
 /** An event banner stays this long. */
@@ -75,6 +75,21 @@ function gamelessChannelGames(current: TallyBoard | null, channelId: string): Ta
     }));
 }
 
+const START_OVER_KEY = 'live-start-over';
+
+/**
+ * The live bar's WATCH FROM THE START while the game on screen is being recorded: a TallyButton labeled as Android's
+ * (FROM THE START, the fast-backward glyph) at the end of the bar, as the start-over action sits at the end of the
+ * Android TV controls row. It has focus while the bar is up; REWIND does the same from anywhere.
+ */
+function StartOverButton(props: { onPress: () => void }) {
+  return (
+    <span class="start-over">
+      <Button focusKey={START_OVER_KEY} glyph="backwardFast" label="From the start" onPress={props.onPress} />
+    </span>
+  );
+}
+
 /**
  * A live channel from the Tally plugin: its continuous playlist (/JellyTV/Live/{id}.m3u8, signed, anonymous: the
  * same address multiview uses; the live ladder keeps it going when a source struggles), with the Android TV live
@@ -97,8 +112,6 @@ export function LivePage(props: PageProps<Extract<Route, { name: 'live' }>>) {
   const [boxScore, setBoxScore] = useState(false);
   const [switcher, setSwitcher] = useState(false);
   const [actionsGameId, setActionsGameId] = useState<string | null>(null);
-  const [bugShownAt, setBugShownAt] = useState(Date.now());
-  const [bugVisible, setBugVisible] = useState(true);
   const [banner, setBanner] = useState<TallyEvent | null>(null);
   const [bannerOn, setBannerOn] = useState(false);
 
@@ -114,7 +127,6 @@ export function LivePage(props: PageProps<Extract<Route, { name: 'live' }>>) {
     engine.stop();
     void engine.load({ url: absolute(props.route.hlsPath), kind: 'hls', live: true, startMs: 0 }).catch(() => undefined);
     showBar();
-    setBugShownAt(Date.now());
     return () => window.clearTimeout(barTimer.current);
   }, [props.route.hlsPath]);
 
@@ -128,16 +140,6 @@ export function LivePage(props: PageProps<Extract<Route, { name: 'live' }>>) {
   const recording = game?.recording ?? null;
   const startOver = recording !== null && recording.state === DvrState.RECORDING && recording.startOverPath !== null && recording.startOverPath !== '' ? recording.startOverPath : null;
 
-  // the bug: back when the game opens, when the score, period or situation changes, while the switcher is up, and
-  // for a moment after any key
-  const bugKey = game !== null ? `${game.away.score}-${game.home.score}|${game.detail}|${game.downDistance ?? ''}` : '';
-  useEffect(() => setBugShownAt(Date.now()), [bugKey]);
-  useEffect(() => {
-    setBugVisible(!boxScore);
-    if (switcher || boxScore) return undefined;
-    const t = window.setTimeout(() => setBugVisible(false), BUG_LINGER_MS);
-    return () => window.clearTimeout(t);
-  }, [bugShownAt, switcher, boxScore]);
 
   useEffect(() => {
     if (!boxScore) return undefined;
@@ -175,7 +177,6 @@ export function LivePage(props: PageProps<Extract<Route, { name: 'live' }>>) {
   const openSwitcher = (): void => {
     setSwitcher(true);
     setBar(false);
-    setBugShownAt(Date.now());
     window.setTimeout(() => {
       const first = switcherGames[0];
       if (first !== undefined) setFocus(switcherKey(first));
@@ -184,6 +185,12 @@ export function LivePage(props: PageProps<Extract<Route, { name: 'live' }>>) {
   function closeSwitcher(): void {
     setSwitcher(false);
     setFocus(props.pageKey);
+  }
+
+  /** WATCH FROM THE START (Android's StartOverAction): the recording so far takes the live player's place. */
+  function watchFromTheStart(): void {
+    if (startOver === null || game === null) return;
+    replace({ name: 'startover', path: startOver, title: matchupTitle(game) });
   }
 
   const switchTo = (g: TallyGame): void => {
@@ -200,7 +207,8 @@ export function LivePage(props: PageProps<Extract<Route, { name: 'live' }>>) {
     if (route !== null) replace(route);
   };
 
-  // HOLD OK on a switcher card: the game's actions
+  // HOLD OK on a switcher card: the game's actions (only while the switcher is up: elsewhere OK is the page's, to
+  // bring the bar and press its button)
   useOkHold(
     () => {
       const key = currentFocusKey();
@@ -210,13 +218,12 @@ export function LivePage(props: PageProps<Extract<Route, { name: 'live' }>>) {
       setActionsGameId(g.id);
       return true;
     },
-    actionsGameId === null,
+    actionsGameId === null && switcher,
     props.active,
   );
 
   useKeyHandler((key) => {
     if (actionsGameId !== null) return false; // the menu's own handler (registered later) runs first
-    setBugShownAt(Date.now());
     if (boxScore) {
       // any key closes the box score; UP and BACK stop there, everything else also reaches the player
       setBoxScore(false);
@@ -228,6 +235,11 @@ export function LivePage(props: PageProps<Extract<Route, { name: 'live' }>>) {
         return true;
       }
       return false; // arrows and OK move through the cards
+    }
+    // the bar's FROM THE START button has focus while the bar is up: OK presses it (the focus system delivers it)
+    if (key === 'enter' && bar && startOver !== null && currentFocusKey() === START_OVER_KEY) {
+      showBar();
+      return false;
     }
     switch (key) {
       case 'back':
@@ -258,7 +270,7 @@ export function LivePage(props: PageProps<Extract<Route, { name: 'live' }>>) {
         return true;
       case 'rewind':
         if (startOver !== null && game !== null) {
-          replace({ name: 'startover', path: startOver, title: matchupTitle(game) });
+          watchFromTheStart();
           return true;
         }
         showBar();
@@ -269,6 +281,14 @@ export function LivePage(props: PageProps<Extract<Route, { name: 'live' }>>) {
     }
   }, props.active);
 
+  const barUp = bar && !switcher && !boxScore;
+  // the bar's one control takes focus while the bar is up; focus goes back to the page when it hides
+  useEffect(() => {
+    if (!props.active) return;
+    if (barUp && startOver !== null) setFocus(START_OVER_KEY);
+    else if (currentFocusKey() === START_OVER_KEY) setFocus(props.pageKey);
+  }, [barUp, startOver !== null, props.active]);
+
   const actionsGame = actionsGameId !== null ? (switcherGames.find((g) => g.id === actionsGameId) ?? null) : null;
   const actionsIsGame = actionsGame !== null && others.length > 0;
 
@@ -276,10 +296,10 @@ export function LivePage(props: PageProps<Extract<Route, { name: 'live' }>>) {
     <div class="player live">
       <div ref={host} />
       <TuneIn key={props.route.channelId} title={props.route.title} firstFrame={player.firstFrame} error={player.error} />
-      <ScoreBug game={game} hideScores={hideScores} visible={bugVisible && !boxScore} />
+      <ScoreBug game={game} hideScores={hideScores} visible={!boxScore} />
       {boxScore && game !== null ? <BoxScoreOverlay game={game} hideScores={hideScores} /> : null}
       {banner !== null ? <EventBanner event={banner} visible={bannerOn} onGone={() => setBanner((b) => (bannerOn ? b : null))} /> : null}
-      {bar && !switcher && !boxScore ? (
+      {barUp ? (
         <>
           <div class="live-top">
             <div class="kicker mono-label">LIVE</div>
@@ -297,9 +317,9 @@ export function LivePage(props: PageProps<Extract<Route, { name: 'live' }>>) {
             <div class="hints">
               {switcherGames.length > 0 ? <KeyHint keyName="DOWN" label="Games" /> : null}
               {game !== null ? <KeyHint keyName="UP" label="Box score" /> : null}
-              {startOver !== null ? <KeyHint keyName="REW" label="Watch from the start" /> : null}
               <KeyHint keyName="CH +/−" label="Change channel" />
               <KeyHint keyName="BACK" label="Leave" />
+              {startOver !== null ? <StartOverButton onPress={watchFromTheStart} /> : null}
             </div>
           </div>
         </>
@@ -325,6 +345,7 @@ export function LivePage(props: PageProps<Extract<Route, { name: 'live' }>>) {
         />
       ) : null}
       <ToastHost />
+      <RecordingNoticeHost active={props.active} pageKey={props.pageKey} />
     </div>
   );
 }

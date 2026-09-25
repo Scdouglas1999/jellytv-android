@@ -73,7 +73,8 @@ function modeFor(r: LibraryRoute): Mode {
 
 /**
  * Opens an item from a library: a folder as a grid of its own; anything else where the Android app sends it
- * (details/navigate.ts: an episode or a season the rundown, a box set its items, a person the person page).
+ * (details/navigate.ts: an episode or a season the rundown, a box set the collection page, a playlist its page, a person
+ * the person page).
  */
 function openItem(r: LibraryRoute, item: BaseItemDto): void {
   if (item.Id == null) return;

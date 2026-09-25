@@ -35,6 +35,40 @@ export function absolute(path: string): string {
   return currentApi().basePath + path;
 }
 
+/**
+ * The device's time zone for the plugin's art (contract 2: times drawn in a card or backdrop use it), or null to let
+ * the server use its own: when the runtime does not say, or says UTC while the clock is not at UTC (an old TV's
+ * Intl without zone data reports UTC whatever the set is configured for).
+ */
+export function deviceTimeZone(now: Date = new Date(), resolved: () => string | undefined = () => Intl.DateTimeFormat().resolvedOptions().timeZone): string | null {
+  let zone: string | undefined;
+  try {
+    zone = resolved();
+  } catch {
+    return null;
+  }
+  if (zone === undefined || zone === null || zone === '') return null;
+  const utc = /^(Etc\/)?(UTC|UCT|GMT|Zulu|Universal)(\+0|-0|0)?$/i.test(zone);
+  if (utc && now.getTimezoneOffset() !== 0) return null;
+  return zone;
+}
+
+/**
+ * A plugin art path (a game's `backdropPath`, a card's `cardPath`, which may already carry a query) made absolute,
+ * asking for the width it is drawn at (contract 1: device pixels on the 1080p canvas; the server snaps it to its
+ * sizes) and the device's zone (contract 2). Older plugins ignore both parameters.
+ */
+export function artUrl(path: string, drawnWidth: number, zone: string | null = deviceTimeZone()): string {
+  return withArtParams(absolute(path), drawnWidth, zone);
+}
+
+/** `url` (which may already carry a query) with the art's `w=` and, when known, `tz=`. */
+export function withArtParams(url: string, drawnWidth: number, zone: string | null): string {
+  const params = ['w=' + String(Math.max(1, Math.round(drawnWidth)))];
+  if (zone !== null) params.push('tz=' + encodeURIComponent(zone));
+  return url + (url.indexOf('?') >= 0 ? '&' : '?') + params.join('&');
+}
+
 export async function tallyInfo(): Promise<TallyInfo> {
   return decodeInfo(await get('/JellyTV/Client/v1/info'));
 }

@@ -14,7 +14,7 @@ export function JobMenu(props: { job: DvrJob; canManage: boolean; onDelete: (job
   const lines: MenuLine[] = [];
   const startOver = job.startOverPath;
   if (job.state === DvrState.DONE) {
-    lines.push({ id: 'play', label: 'Play', dismiss: true, onPress: () => void playRecording(job.itemId) });
+    lines.push({ id: 'play', label: 'Play', dismiss: true, onPress: () => void playRecording(job.itemId, job.libraryState, title) });
     if (canManage) lines.push({ id: 'delete', label: 'Delete', onPress: () => props.onDelete(job) });
   } else if (job.state === DvrState.RECORDING) {
     if (startOver !== null) lines.push({ id: 'start', label: 'Watch from the start', dismiss: true, onPress: () => watchFromStart(startOver, title) });

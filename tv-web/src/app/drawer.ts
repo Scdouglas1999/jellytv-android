@@ -82,6 +82,9 @@ export function drawerKeyFor(route: Route): string | null {
       return 'settings';
     case 'library':
       return 'lib-' + route.libraryId;
+    case 'collection':
+    case 'playlist':
+      return route.libraryId !== undefined ? 'lib-' + route.libraryId : null;
     case 'placeholder':
       return route.title === 'Surprise me' ? 'surprise' : route.title === 'Favorites' ? 'favorites' : null;
     default:

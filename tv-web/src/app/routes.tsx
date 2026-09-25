@@ -18,6 +18,8 @@ import { StartOverPage } from '../pages/sports/StartOverPage';
 import { MultiviewPage } from '../pages/multiview/MultiviewPage';
 import { ItemPage } from '../pages/details/ItemPage';
 import { SeasonPage } from '../pages/details/SeasonPage';
+import { CollectionPage } from '../pages/collection/CollectionPage';
+import { PlaylistPage } from '../pages/playlist/PlaylistPage';
 
 type Pages = { [N in Route['name']]: { page: FunctionComponent<PageProps<Extract<Route, { name: N }>>>; chrome: 'rail' | 'full' } };
 
@@ -26,6 +28,8 @@ export const PAGES: Pages = {
   search: { page: PlaceholderPage, chrome: 'rail' },
   library: { page: LibraryPage, chrome: 'rail' },
   item: { page: ItemPage, chrome: 'rail' },
+  collection: { page: CollectionPage, chrome: 'rail' },
+  playlist: { page: PlaylistPage, chrome: 'rail' },
   season: { page: SeasonPage, chrome: 'rail' },
   sports: { page: SportsPage, chrome: 'rail' },
   settings: { page: SettingsPage, chrome: 'rail' },

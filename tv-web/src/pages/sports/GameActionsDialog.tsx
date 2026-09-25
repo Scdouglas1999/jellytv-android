@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { allowsNewRecording, DvrState, recordingView, spoilerGuarded, teamRuleFor, type DvrRule, type GameRecordingView } from '../../api/tallyDvr';
+import { allowsNewRecording, DvrState, recordingView, spoilerGuarded, teamRuleFor, type DvrRule, type GameRecordingView, type LibraryState } from '../../api/tallyDvr';
 import { isLive, isUpcoming, teamKey, type TallyGame, type TallyTeam } from '../../api/tallyModels';
 import { setFocus } from '../../focus/focus';
 import { gameStatusLabel, tallyUppercase } from '../../util/format';
@@ -35,7 +35,8 @@ interface GameDvr {
   awayRule: DvrRule | null;
   homeRule: DvrRule | null;
   guarded: boolean;
-  watchableItemId: string | null;
+  /** A finished recording to watch (its item may still be on its way into a library: the notice then says so). */
+  watchable: { itemId: string | null; libraryState: LibraryState } | null;
   startOverPath: string | null;
   canRecord: boolean;
 }
@@ -66,7 +67,7 @@ function useGameDvr(game: TallyGame | null): GameDvr | null {
     awayRule: list !== null ? teamRuleFor(list, game, game.away) : null,
     homeRule: list !== null ? teamRuleFor(list, game, game.home) : null,
     guarded: spoilerGuarded(game),
-    watchableItemId: recording !== null && recording.state === DvrState.DONE ? recording.itemId : null,
+    watchable: recording !== null && recording.state === DvrState.DONE ? { itemId: recording.itemId, libraryState: recording.libraryState } : null,
     startOverPath: recording !== null && recording.state === DvrState.RECORDING ? recording.startOverPath : null,
     canRecord: canManage && (isUpcoming(game) || isLive(game)) && (recording === null || allowsNewRecording(recording)),
   };
@@ -91,7 +92,7 @@ function dvrGameLines(game: TallyGame, dvr: GameDvr): MenuLine[] {
       }
     } else if ((r.state === DvrState.SCHEDULED || r.state === DvrState.WAITING) && dvr.canManage) {
       lines.push({ id: 'dvr-cancel', label: 'Cancel recording', info: state, onPress: () => void dvrActions.cancel(r.jobId) });
-    } else if (r.state === DvrState.DONE && dvr.watchableItemId !== null) {
+    } else if (r.state === DvrState.DONE && dvr.watchable !== null && dvr.guarded) {
       // "Watch the recording" leads the menu
     } else {
       lines.push({ id: 'dvr-state', info: state, infoLive: r.state === DvrState.FAILED });
@@ -146,9 +147,9 @@ export function GameActionsDialog(props: {
   const [scoreShown, setScoreShown] = useState(false);
   const [keepTeam, setKeepTeam] = useState<TallyTeam | null>(null);
   const lines: MenuLine[] = [];
-  if (dvr !== null && dvr.guarded && dvr.watchableItemId !== null) {
-    const itemId = dvr.watchableItemId;
-    lines.push({ id: 'watch-recording', label: 'Watch the recording', dismiss: true, onPress: () => void playRecording(itemId) });
+  if (dvr !== null && dvr.guarded && dvr.watchable !== null && game !== null) {
+    const w = dvr.watchable;
+    lines.push({ id: 'watch-recording', label: 'Watch the recording', dismiss: true, onPress: () => void playRecording(w.itemId, w.libraryState, matchupTitle(game)) });
   }
   if (actions.watch !== undefined) lines.push({ id: 'watch', label: actions.watchLabel ?? 'Watch', dismiss: true, onPress: actions.watch });
   if (actions.addToMultiview !== undefined) lines.push({ id: 'multiview', label: 'Add to multiview', dismiss: true, onPress: actions.addToMultiview });

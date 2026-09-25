@@ -9,7 +9,9 @@ import { useArrivalFocus, type PageProps } from '../../app/page';
 import { useFocusable } from '../../focus/focus';
 import type { Route } from '../../router/router';
 import { tallyUppercase } from '../../util/format';
+import { CollectionView } from '../collection/CollectionPage';
 import { PersonPage } from '../person/PersonPage';
+import { PlaylistView } from '../playlist/PlaylistPage';
 import { PageMessage } from './common';
 import { loadItem } from './detailsData';
 import { EpisodePage } from './EpisodePage';
@@ -26,10 +28,12 @@ function arrivalKey(pageKey: string, item: BaseItemDto | null): string | null {
   if (item === null) return null;
   if (item.Type === 'Person') return `${pageKey}-favorite`;
   if (item.Type === 'Series' || item.Type === 'Episode' || FILM_TYPES.indexOf(item.Type ?? '') >= 0) return `${pageKey}-play`;
+  // the collection and playlist pages put focus where their items say (they load them)
+  if (item.Type === 'BoxSet' || item.Type === 'Playlist') return null;
   return `${pageKey}-later`;
 }
 
-/** A kind of item a later build opens (collections, playlists, music): said plainly. */
+/** A kind of item a later build opens (music): said plainly. */
 function Later(props: { item: BaseItemDto; pageKey: string }) {
   const f = useFocusable<HTMLDivElement>({ focusKey: `${props.pageKey}-later` });
   return (
@@ -71,6 +75,8 @@ export function ItemPage(props: PageProps<Extract<Route, { name: 'item' }>>) {
   if (it.Type === 'Series') return <SeriesPage item={it} pageKey={props.pageKey} active={props.active} refresh={load} />;
   if (it.Type === 'Episode') return <EpisodePage item={it} pageKey={props.pageKey} active={props.active} refresh={load} />;
   if (it.Type === 'Person') return <PersonPage item={it} pageKey={props.pageKey} active={props.active} refresh={load} />;
+  if (it.Type === 'BoxSet' && it.Id != null) return <CollectionView page={props} collectionId={it.Id} />;
+  if (it.Type === 'Playlist' && it.Id != null) return <PlaylistView page={props} playlistId={it.Id} />;
   if (it.Type === 'Season' && it.SeriesId != null) return <SeasonView page={props} seriesId={it.SeriesId} seasonId={it.Id ?? undefined} />;
   if (FILM_TYPES.indexOf(it.Type ?? '') >= 0) return <FilmPage item={it} pageKey={props.pageKey} active={props.active} refresh={load} />;
   return <Later item={it} pageKey={props.pageKey} />;

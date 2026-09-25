@@ -1,9 +1,9 @@
 /* The live player's Tally overlays (ui/player/*.kt, TallyPlaybackPage.kt) at 1080p: Android dp × 1.6. Scoped to
    `.player.live` so they win over player.css's placeholders. */
 
-/* ---- Score bug (ScoreBug.kt): top-end, 27dp + 64dp down ---- */
+/* ---- Score bug (ScoreBug.kt): top-end, 27dp + 64dp down; over the controls (drawn after them on Android) ---- */
 .player.live .score-bug {
-  position: absolute; right: 77px; top: 146px; padding: 13px 22px; text-align: right; background: rgba(0, 0, 0, 0.7);
+  position: absolute; z-index: 2; right: 77px; top: 146px; padding: 13px 22px; text-align: right; background: rgba(0, 0, 0, 0.7);
   border: var(--hairline) solid #5a5d57; transition: opacity 140ms linear;
 }
 .player.live .score-bug.faded { opacity: 0; transition: opacity 420ms linear; }
@@ -67,3 +67,5 @@
 .player.live .live-bar .live-tag .indicator { width: 22px; height: 22px; margin-right: 16px; background: var(--accent); }
 .player.live .live-bar .channel { flex: 1; min-width: 0; text-align: right; color: var(--text-secondary); }
 .player.live .live-bar .hints { display: flex; align-items: center; margin-top: 29px; }
+/* WATCH FROM THE START at the end of the bar (the start-over action ends the Android TV controls row) */
+.player.live .live-bar .hints .start-over { margin-left: auto; }

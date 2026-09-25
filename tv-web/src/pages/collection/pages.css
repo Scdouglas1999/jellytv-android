@@ -1,0 +1,37 @@
+/* The collection and playlist pages (media/collection, media/playlist). 1 Tally dp = 1.6 px. */
+
+/* the page's image scrim over the backdrop (drawn between the backdrop and the scrolling content) */
+.pages-scrim { position: absolute; z-index: 0; left: 0; top: 0; right: 0; bottom: 0; pointer-events: none; }
+/* the collection's: ground 55% at the top, 80% at 30%, ground from 65% (the backdrop follows the focused film) */
+.collection-page .pages-scrim { background: linear-gradient(to bottom, rgba(14, 15, 14, 0.55) 0%, rgba(14, 15, 14, 0.8) 30%, var(--ground) 65%); }
+
+/* the header's action row: a sideways-scrolling strip that ends at the page margin plus the focus room (Android's
+   LazyRow with bleedHorizontal: the last control is cut there until focus scrolls it in); 12dp between controls, 8dp between glyph and label, as the film page's row */
+.pages-strip { position: relative; overflow: hidden; margin-right: -7px; white-space: nowrap; }
+.pages-strip-track { display: inline-flex; align-items: center; padding-right: 7px; vertical-align: top; }
+.pages-strip-track > * + * { margin-left: 17px; }
+.pages-strip-track .btn .glyph { margin-right: 13px; }
+.pages-strip-track .btn > span:not(.glyph):not(.btn-trailing) { margin-right: -3px; }
+.pages-strip-track .lib-control { flex: none; }
+
+/* the rows under the header start 24dp below the action row (DetailHeader's own padding); no ground of their own
+   (unlike the film page's rows): the page scrim fades the backdrop out behind them, as on Android */
+.collection-page .detail-rows.pages-rows { min-height: 200px; background: transparent; }
+
+/* EmptyState under a header: 140dp high, a dashed frame, not focusable */
+.pages-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; height: 224px; margin: 0 var(--margin-x) 43px;
+  border: var(--hairline) dashed var(--rule-strong); text-align: center;
+}
+.pages-empty .title { font-family: var(--sans); font-weight: 600; font-size: 32px; color: var(--text); }
+.pages-empty .subtitle { margin-top: 13px; font-size: 24px; color: var(--muted); }
+
+/* a row still loading or failed (RowNote) */
+.pages-row-note { margin: 0 var(--margin-x) 38px; }
+.pages-row-note .row-header { margin-bottom: 13px; }
+.pages-row-note .mono-label { color: var(--muted); }
+.pages-row-note .mono-label.failure { color: var(--live-text); }
+
+/* the mixed grid (separate types off): poster cards in rows, 16dp apart */
+.pages-grid { display: flex; flex-wrap: wrap; padding: 7px var(--margin-x) 43px; }
+.pages-grid > .card { margin: 0 19px 19px 0; }

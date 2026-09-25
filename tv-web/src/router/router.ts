@@ -6,6 +6,8 @@
 import { createStore } from '../util/store';
 
 /**
+ * `libraryId` on the collection and playlist routes: the library they were opened from (the rail keeps its light).
+ *
  * What a library route shows besides the library itself (pages/library): a genre or a studio of it, a folder inside
  * it, a box set, or every item of one of its Recommended rows ("view all"). `libraryId` stays the library's, so the rail keeps
  * its light on the library.
@@ -22,6 +24,10 @@ export type Route =
   | { name: 'search' }
   | { name: 'library'; libraryId: string; title: string; collectionType: string; view?: LibraryView }
   | { name: 'item'; itemId: string }
+  /** A box set (Android's TallyCollectionPage): header, actions, a row of its items per type. */
+  | { name: 'collection'; itemId: string; libraryId?: string }
+  /** A playlist (Android's TallyPlaylistPage): header, actions, the numbered list of its items. */
+  | { name: 'playlist'; itemId: string; libraryId?: string }
   /** `queue`: the items to play in order, `itemId` first (a library's Play all / Shuffle); else the item's own queue. */
   | { name: 'player'; itemId: string; startMs?: number; queue?: string[] }
   | { name: 'postplay'; itemId: string }

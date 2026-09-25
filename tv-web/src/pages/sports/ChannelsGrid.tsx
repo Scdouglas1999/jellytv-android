@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'preact/hooks';
-import { absolute } from '../../api/tally';
+import { artUrl } from '../../api/tally';
 import { isLive, type TallyChannel, type TallyGame } from '../../api/tallyModels';
 import { useFocusable } from '../../focus/focus';
 import { LabelBar } from '../../kit/Bits';
@@ -12,6 +12,9 @@ import { watchChannel } from './sportsState';
 export const channelFocusKey = (channel: TallyChannel): string => 'sc-' + channel.id;
 
 /** "IND 7 · KC 0": abbreviation then score, away first. */
+/** A card's picture width in the 4-column grid (sportsPage.css .channel-card, measured at 1080p). */
+const CHANNEL_CARD_W = 384;
+
 function scoreline(game: TallyGame): string {
   return [game.away, game.home].map((t) => `${t.abbr !== '' ? t.abbr : t.shortName} ${t.score === null ? '–' : String(t.score)}`).join(' · ');
 }
@@ -30,7 +33,7 @@ function ChannelCard(props: { channel: TallyChannel; game: TallyGame | null; hid
       if (f.ref.current !== null) props.onFocusCard(f.ref.current, channel);
     },
   });
-  const url = channel.cardPath !== '' ? absolute(channel.cardPath) : null;
+  const url = channel.cardPath !== '' ? artUrl(channel.cardPath, CHANNEL_CARD_W) : null;
   return (
     <div ref={f.ref} class="channel-card" onClick={() => watchChannel(channel)}>
       <div class="art">{url !== null && !failed ? <img src={url} alt="" onError={() => setFailed(true)} /> : null}</div>

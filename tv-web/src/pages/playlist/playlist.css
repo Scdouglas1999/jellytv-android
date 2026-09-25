@@ -1,0 +1,52 @@
+/* The playlist page (media/playlist/TallyPlaylistPage.kt). 1 Tally dp = 1.6 px. */
+
+/* the image scrim over the backdrop (the focused row's): ground 72% at the top, 94% a third down, then ground */
+.playlist-page .pages-scrim { background: linear-gradient(to bottom, rgba(14, 15, 14, 0.72) 0%, rgba(14, 15, 14, 0.94) 35%, var(--ground) 100%); }
+
+/* header: kicker, title (Sans SemiBold 40/46sp, 2 lines, 640dp), meta, then the actions 16dp lower; 8dp between
+   lines, 20dp under the header */
+/* (the gaps are the Android capture's, measured at 1080p: Compose's font padding makes them a little wider than 8dp) */
+.pl-header { position: relative; padding: var(--margin-y) var(--margin-x) 37px; }
+.pl-kicker { color: var(--muted); line-height: 29px; }
+.pl-title { margin-top: 16px; max-width: 1024px; font-family: var(--sans); font-weight: 600; font-size: 64px; line-height: 74px; color: var(--text); }
+.pl-meta { margin-top: 20px; color: var(--text-secondary); line-height: 29px; }
+.pl-header > .pl-actions { margin-top: 45px; }
+
+.pl-rows { padding-bottom: var(--margin-y); }
+.pl-loading { margin: 0 var(--margin-x); color: var(--muted); }
+
+/* a row: 104dp high, reaching 8dp into the page margin so its frame lines up with the header's text */
+.pl-row { position: relative; display: flex; height: 166px; margin: 0 var(--margin-x) 0 64px; }
+.pl-row.moving::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: var(--accent); }
+.pl-surface { position: relative; flex: 1; min-width: 0; display: flex; align-items: center; padding: 0 18px; }
+.pl-surface[data-focused] { background: var(--ground-raised); }
+.pl-surface[data-focused]::after {
+  content: ''; position: absolute; left: 0; top: 0; right: 0; bottom: 0; border: var(--focus) solid var(--accent); pointer-events: none;
+}
+/* number column 56dp: mono 22sp, textSecondary */
+.pl-number { flex: none; width: 90px; font-family: var(--mono); font-weight: 500; font-size: 35px; color: var(--text-secondary); white-space: nowrap; }
+.pl-still { position: relative; flex: none; width: 256px; height: 144px; background: var(--screen); border: var(--hairline) solid var(--rule); overflow: hidden; }
+.pl-still img { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: cover; }
+.pl-still .progress { position: absolute; left: 0; right: 0; bottom: 0; height: 6px; background: var(--rule-strong); }
+.pl-still .progress > div { height: 100%; background: var(--accent); }
+.pl-still .watched {
+  position: absolute; right: 0; top: 0; display: flex; align-items: center; padding: 3px 10px; background: var(--label-bar);
+  font-family: var(--mono); font-weight: 500; font-size: 18px; line-height: 21px; letter-spacing: 1.6px; color: var(--muted);
+}
+.pl-still .watched .glyph { font-size: 14px; margin-right: 6px; color: var(--text); }
+/* title Sans Medium 18/22sp; meta mono 13/16sp, 1sp tracking, muted; 20dp after the still, 12dp before the end */
+.pl-texts { flex: 1; min-width: 0; padding: 0 19px 0 32px; }
+.pl-texts .title { font-family: var(--sans); font-weight: 500; font-size: 29px; line-height: 35px; color: var(--text); }
+.pl-texts .meta { margin-top: 6px; font-family: var(--mono); font-weight: 500; font-size: 21px; line-height: 26px; letter-spacing: 1.6px; color: var(--muted); }
+
+/* the buttons at the right: 12dp after the row, 20dp from its top, 8dp apart */
+.pl-buttons { flex: none; display: flex; align-items: flex-start; padding: 32px 0 0 19px; }
+.pl-buttons > * + * { margin-left: 13px; }
+.pl-icon-slot { position: relative; }
+.pl-icon { position: relative; width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; color: var(--text); }
+.pl-icon .glyph { font-size: 29px; }
+.pl-icon::after { content: ''; position: absolute; left: 0; top: 0; right: 0; bottom: 0; border: var(--hairline) solid var(--rule-strong); pointer-events: none; }
+.pl-icon[data-focused]::after { border: var(--focus) solid var(--accent); }
+.pl-icon.disabled { color: var(--muted); opacity: 0.5; }
+.pl-icon.disabled::after { border-color: var(--rule); }
+.pl-caption { position: absolute; left: 50%; top: 74px; transform: translateX(-50%); white-space: nowrap; color: var(--muted); }

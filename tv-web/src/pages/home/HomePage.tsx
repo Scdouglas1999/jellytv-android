@@ -1,7 +1,7 @@
 import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models/base-item-dto';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { backdropUrl } from '../../api/images';
-import { absolute } from '../../api/tally';
+import { artUrl } from '../../api/tally';
 import type { TallyGame } from '../../api/tallyModels';
 import { isFollowed, isLive } from '../../api/tallyModels';
 import { useArrivalFocus, type PageProps } from '../../app/page';
@@ -11,6 +11,7 @@ import { MediaRow } from '../../kit/MediaRow';
 import { useSettledBackdrop } from '../../kit/settledBackdrop';
 import { ScrollPage } from '../../kit/ScrollPage';
 import { ToastHost } from '../../kit/Toast';
+import { RecordingNoticeHost } from '../sports/RecordingNotice';
 import { useKeyHandler } from '../../platform/keyRouter';
 import type { Route } from '../../router/router';
 import { DetailDialogs, cardMenu, type Dialog } from '../details/DetailDialogs';
@@ -28,6 +29,9 @@ import { HomeHeader, type HomeFocus } from './HomeHeader';
 import { homeRows, type RowState } from './homeData';
 import './home.css';
 
+/** The backdrop's box (home.css .home-backdrop): the width a game's backdrop art is asked for. */
+const HOME_BACKDROP_W = 1400;
+
 /** Card height used for LOADING… rows so nothing jumps when cards arrive (poster + label bar + focus room). */
 const POSTER_ROW_HEIGHT = 317 + 64 + 14;
 
@@ -44,7 +48,7 @@ const gameKey = (game: TallyGame): string => 'home-game-' + game.id;
 const itemKey = (row: string, item: BaseItemDto): string => `home-${row}-${item.Id ?? ''}`;
 
 /** What a card on Home is, by focus key: the item menu, the game menu and the PLAY key look it up. */
-type HomeCard = { kind: 'item'; item: BaseItemDto } | { kind: 'game'; game: TallyGame };
+type HomeCard = { kind: 'item'; item: BaseItemDto; row: string } | { kind: 'game'; game: TallyGame };
 
 export function HomePage(props: PageProps<Extract<Route, { name: 'home' }>>) {
   const views = useStore(libraries);
@@ -100,9 +104,39 @@ export function HomePage(props: PageProps<Extract<Route, { name: 'home' }>>) {
   games.forEach((game) => cards.current.set(gameKey(game), { kind: 'game', game }));
   for (const spec of visibleRows) {
     const r = rows[spec.key];
-    if (r?.kind === 'items') r.items.forEach((item) => cards.current.set(itemKey(spec.key, item), { kind: 'item', item }));
+    if (r?.kind === 'items') r.items.forEach((item) => cards.current.set(itemKey(spec.key, item), { kind: 'item', item, row: spec.key }));
   }
   const [dialog, setDialog] = useState<Dialog | null>(null);
+
+  /**
+   * A card leaves its row at once (Remove from continue watching; the rows reload from the server right after):
+   * focus moves to the next card of the row, or the one before it, or the next row's first card.
+   */
+  const dropCard = (rowKey: string, item: BaseItemDto): void => {
+    const state = rows[rowKey];
+    if (state?.kind !== 'items') return;
+    const index = state.items.findIndex((i) => i.Id === item.Id);
+    const left = state.items.filter((i) => i.Id !== item.Id);
+    const neighbor = left[Math.min(index, left.length - 1)];
+    let next: string | null = neighbor !== undefined ? itemKey(rowKey, neighbor) : null;
+    if (next === null) {
+      const at = visibleRows.findIndex((s) => s.key === rowKey);
+      const others = visibleRows.slice(at + 1).concat(visibleRows.slice(0, Math.max(0, at)).reverse());
+      for (const spec of others) {
+        const r = rows[spec.key];
+        const first = r?.kind === 'items' ? r.items[0] : undefined;
+        if (first !== undefined) {
+          next = itemKey(spec.key, first);
+          break;
+        }
+      }
+      if (next === null && games[0] !== undefined) next = gameKey(games[0]);
+    }
+    setRows((r) => ({ ...r, [rowKey]: { kind: 'items', items: left } }));
+    // after the menu has put focus back on the card that is leaving
+    const target = next;
+    window.setTimeout(() => setFocus(target ?? props.pageKey), 0);
+  };
   const [gameMenu, setGameMenu] = useState<{ gameId: string; returnKey: string } | null>(null);
   const menuOpen = dialog !== null || gameMenu !== null;
   useOkHold(
@@ -111,7 +145,15 @@ export function HomePage(props: PageProps<Extract<Route, { name: 'home' }>>) {
       const card = cards.current.get(key);
       if (card === undefined) return false;
       if (card.kind === 'game') setGameMenu({ gameId: card.game.id, returnKey: key });
-      else setDialog(cardMenu(card.item, key));
+      else {
+        const spec = specs.find((s) => s.key === card.row);
+        const item = card.item;
+        setDialog({
+          ...cardMenu(item, key),
+          continueWatching: spec?.continueWatching === true,
+          onRemovedFromContinueWatching: () => dropCard(card.row, item),
+        });
+      }
       return true;
     },
     !menuOpen,
@@ -135,7 +177,7 @@ export function HomePage(props: PageProps<Extract<Route, { name: 'home' }>>) {
     if (gameMenu !== null && menuGame === null) closeGameMenu();
   }, [gameMenu !== null && menuGame === null]);
 
-  const wanted = focus?.kind === 'item' ? backdropUrl(focus.item) : focus?.kind === 'game' && focus.game.backdropPath !== null ? absolute(focus.game.backdropPath) : null;
+  const wanted = focus?.kind === 'item' ? backdropUrl(focus.item) : focus?.kind === 'game' && focus.game.backdropPath !== null ? artUrl(focus.game.backdropPath, HOME_BACKDROP_W) : null;
   const backdrop = useSettledBackdrop(wanted);
 
   return (
@@ -210,6 +252,7 @@ export function HomePage(props: PageProps<Extract<Route, { name: 'home' }>>) {
       ) : null}
       <DetailDialogs dialog={dialog} setDialog={setDialog} pageKey={props.pageKey} onChanged={load} />
       <ToastHost />
+      <RecordingNoticeHost active={props.active} pageKey={props.pageKey} />
     </div>
   );
 }

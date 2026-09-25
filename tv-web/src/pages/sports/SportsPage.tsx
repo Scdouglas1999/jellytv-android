@@ -5,6 +5,7 @@ import type { PageProps } from '../../app/page';
 import { currentFocusKey, focusExists, FocusGroup, setFocus, useFocusable } from '../../focus/focus';
 import { IndicatorSquare } from '../../kit/Bits';
 import { ToastHost } from '../../kit/Toast';
+import { RecordingNoticeHost } from './RecordingNotice';
 import type { Route } from '../../router/router';
 import { tally } from '../../state/nav';
 import { board, boardError, tallyUserSettings, useBoardPolling } from '../../state/sportsData';
@@ -266,6 +267,7 @@ export function SportsPage(props: PageProps<Extract<Route, { name: 'sports' }>>)
         />
       ) : null}
       <ToastHost />
+      <RecordingNoticeHost active={props.active} pageKey={props.pageKey} />
     </div>
   );
 }
