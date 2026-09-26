@@ -9,6 +9,22 @@
 
 <p align="center"><img src="tally/readme/tour.webp" alt="Moving through Tally: the home screen with today's games, then a film's page" width="100%"/></p>
 
+## Install
+
+Tally is a Jellyfin app for TVs and phones. Pick your device for a quick start:
+
+| Your device | What it takes | Time |
+|---|---|---|
+| [**Android TV, Google TV, Fire TV, Nvidia Shield**](INSTALL.md#android-tv-and-fire-tv) | The free Downloader app on the TV | 5 min |
+| [**Android phone or tablet**](INSTALL.md#phones-and-tablets) | A download in the phone's browser | 2 min |
+| [**Samsung TV**, 2020 or newer](INSTALL.md#samsung-tvs) | A computer and Developer Mode on the TV; the server needs the Tally plugin | 15 min |
+| [**LG TV**, 2020 or newer](INSTALL.md#lg-tvs) | A computer, LG's Developer Mode app and a free LG developer account; the server needs the Tally plugin | 20 min |
+| [**Your Jellyfin server**](INSTALL.md#the-server-plugin) | Windows setup, Docker, a Linux script or Jellyfin's plugin catalog | 5 min |
+
+**Running the server?** Install [the plugin](INSTALL.md#the-server-plugin) first: the Sports section needs it, and so
+do Samsung and LG TVs. Then send friends the invite link from Tally's settings, and they're set up from their phone.
+All the steps are in [INSTALL.md](INSTALL.md).
+
 ## Why it looks like this
 
 Tally is a Jellyfin app for Android TV and Android phones. It plays your films, shows and music, and tonight's games
@@ -131,53 +147,6 @@ new version of Tally comes out, the app offers to update itself the next time yo
 If you normally reach your server over the internet and the internet goes down, Tally switches to the server's
 home-network address and keeps playing. It switches back when the internet returns.
 
-## Install
-
-Tally runs on Android TV, Google TV, Fire TV and the Nvidia Shield, and on Android phones (Android 6 or newer). One
-download covers all of them. It isn't in an app store yet.
-
-**On a TV,** you install it with **Downloader**, a free app most TVs have in their store:
-
-1. Install **Downloader** on your TV and open it.
-2. Type in this address and let it download:
-   `https://github.com/Scdouglas1999/Tally/releases/latest/download/Tally.apk`
-3. Install it when Downloader asks, then open Tally and sign in to your Jellyfin server. You can delete Downloader
-   afterward.
-
-**On a phone,** open [the same address](https://github.com/Scdouglas1999/Tally/releases/latest/download/Tally.apk)
-in the phone's browser, open the downloaded file, and let the browser install apps when Android asks.
-
-Tally installs next to the official Jellyfin app and Wholphin, and doesn't replace either.
-
-**If you run the server,** the Tally plugin gives your friends an easier way in. It adds an install page to your
-Jellyfin server with a short Downloader code, and the app it hands out already knows your server's address. Friends
-then sign in from their phone with Quick Connect, so nobody has to type a password with a remote.
-
-### Samsung TVs
-
-Tally also runs on Samsung smart TVs from 2020 on, with no streaming box. It's the same Tally, with sports,
-multiview and the player, rebuilt as a TV web app. The TV app comes from your server's Tally plugin, so the server
-needs the plugin (2.1 or newer), and plugin updates update the TV.
-
-Installing it takes a computer on the same network: turn on the TV's Developer Mode, then run
-**Tally for Samsung** (`Tally-Samsung-Installer-windows.exe`, or the Linux and macOS versions, from the
-[latest release](https://github.com/Scdouglas1999/Tally/releases/latest)). It finds the TV, signs Tally for it and
-installs it. [tv-web/INSTALL-SAMSUNG.md](tv-web/INSTALL-SAMSUNG.md) walks through every step. On 2023 and newer
-Samsung TVs, the installer asks you to sign in with a free Samsung account once.
-
-### LG TVs
-
-LG smart TVs from 2020 on (webOS 5 and newer) get the same Tally: sports, the player, multiview (the focused tile
-plays and the others show live cards, since LG TVs play one video at a time), and the Magic Remote's pointer as well
-as its arrow keys. Like on Samsung, the TV app comes from your server's Tally plugin, so plugin updates update the TV.
-
-Installing it takes a computer on the same network and LG's free **Developer Mode** app on the TV, which needs a free
-LG developer account. Then run **Tally for LG** (`Tally-LG-Installer-windows.exe`, or the Linux and macOS versions,
-from the [latest release](https://github.com/Scdouglas1999/Tally/releases/latest)). It finds the TV, asks for the
-passphrase the Developer Mode app shows, and installs Tally. [tv-web/INSTALL-LG.md](tv-web/INSTALL-LG.md) walks
-through every step. LG removes apps installed this way when Developer Mode's session runs out; once someone has
-signed in on the TV, the server's Tally plugin renews that session every day, so Tally stays.
-
 ## The server plugin
 
 Tally is a complete Jellyfin app on its own. The server plugin adds the parts that need the server's help:
@@ -194,18 +163,8 @@ Tally is a complete Jellyfin app on its own. The server plugin adds the parts th
 It works with Jellyfin 10.10, 10.11 and 12.1. Its source is in [`server/`](server/), in this repository, under the
 same license as the app. Without the plugin, Tally hides the Sports section and works like any other Jellyfin app.
 
-There are four ways to install it, all described in [server/install/README.md](server/install/README.md):
-
-- **Windows:** run `Tally-Server-Setup.exe` from the [latest release](https://github.com/Scdouglas1999/Tally/releases/latest).
-  It adds the plugin to your Jellyfin, or installs the official Jellyfin first if the computer has none.
-- **Jellyfin's plugin catalog:** add `https://raw.githubusercontent.com/Scdouglas1999/Tally/main/server/manifest.json`
-  under Dashboard → Plugins → Manage Repositories, then install Tally from the catalog.
-- **Docker:** `docker compose up -d` with the release's `docker-compose.yml` runs the official Jellyfin image with the
-  plugin in place.
-- **Debian and Ubuntu:** `curl -fsSL https://github.com/Scdouglas1999/Tally/releases/latest/download/install-linux.sh | sudo bash`
-
-Whichever you use, new versions of the plugin then come through Jellyfin's own plugin updates. None of these include
-Jellyfin itself; when it is needed, it comes from Jellyfin's own servers.
+To install it, see [the server plugin quick start](INSTALL.md#the-server-plugin): a Windows setup, Docker, a Linux
+script or Jellyfin's plugin catalog. New versions then come through Jellyfin's own plugin updates.
 
 ## Building it yourself
 
