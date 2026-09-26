@@ -308,13 +308,19 @@ object PhoneDimens {
     val focusBorder = 2.dp
 
     /**
-     * The widest a page's row of full-width buttons runs: on a phone they span the page, on a tablet they stop here
-     * instead of stretching across the screen.
+     * The widest a page's row of full-width buttons runs: on a phone they span the page, on a tablet they stop here,
+     * at about the width they have on a large phone (a 432dp screen less its margins), instead of stretching across it.
      */
-    val buttonMaxWidth = 480.dp
+    val buttonMaxWidth = 400.dp
 
-    /** At or above this width (a tablet) the games list is laid out in two columns. */
+    /**
+     * At or above this width (a tablet) the games list is laid out in columns: as many as fit [gameCardWidth] wide,
+     * each card at most [gameCardMaxWidth].
+     */
     val twoColumnMinWidth = 600.dp
+
+    /** The widest a game card grows in a tablet's games list. */
+    val gameCardMaxWidth = 360.dp
 }
 
 /**
