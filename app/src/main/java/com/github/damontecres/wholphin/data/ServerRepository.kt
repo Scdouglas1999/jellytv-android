@@ -191,13 +191,14 @@ class ServerRepository
             withContext(WholphinDispatchers.Main) { _current.value = current }
         }
 
-        // After an offline start the user details were never fetched ([currentUserDto] is null, so [updateUserDto]
-        // keeps it null): once the server answers, set them for the signed-in user.
-        suspend fun tallyRefreshUserDto() {
-            val userDto by apiClient.userApi.getCurrentUser()
-            withContext(WholphinDispatchers.Main) {
-                if (currentUser?.id == userDto.id) _currentUserDto.value = userDto
-            }
+        // After an offline start the user details were never fetched ([currentUserDto] is null, and [updateUserDto] only
+        // replaces details it already has): once the server answers, the session is completed as a sign-in completes it
+        // ([changeUser]): the user details, the server's name and version, and the saved user, which reloads what
+        // depends on the user (home rows, libraries). Nothing when the details are known.
+        suspend fun tallyCompleteOfflineSession() {
+            if (currentUserDto != null) return
+            val current = _current.value ?: return
+            changeUser(current.server, current.user)
         }
         // TALLY: end
 
