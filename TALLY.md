@@ -88,7 +88,7 @@ file is a future merge conflict.** Therefore:
 | W58 | `services/PlayerFactory.kt` (video and audio players) | the players' data source reads downloads first (`tallydl://` URIs, downloaded subtitle files), then what upstream used |
 | W59 | `services/MusicService.kt` (`convert`) | a downloaded track plays from the device |
 | W60 | `MainActivity.kt` (`onCreate` after W42; `appStart`: before the upgrade step and in its `catch`) | `TallyOfflineStart`: starts downloads; no network or the server unreachable with completed downloads → offline mode on the downloads page instead of the server list |
-| W61 | `data/ServerRepository.kt` (after `closeSession`) | `tallyRestoreOffline`: the saved session without asking the server (offline start) |
+| W61 | `data/ServerRepository.kt` (after `closeSession`) | `tallyRestoreOffline`: the saved session without asking the server (offline start); `tallyRefreshUserDto`: the signed-in user's details once the server answers again (upstream's `updateUserDto` only replaces details it already has, so after an offline start they stayed unknown) |
 | W62 | `ui/nav/Destination.kt`, `ui/nav/DestinationContent.kt` (the TALLY blocks at the end) | `Destination.TallyDownloads` and its page |
 | W63 | `AndroidManifest.xml` | downloads: FOREGROUND_SERVICE_DATA_SYNC, `TallyDownloadService` (Media3 download service), Media3's `PlatformSchedulerService` |
 | W64 | `ui/preferences/PreferencesContent.kt` (before `prefList`; top of the list's `LazyColumn`; in each row's `item` before `when (pref)`) | Tally's settings layout on the main screen (`TallyExtraSettings`, `ui/settings/`): About at the very bottom with Support Tally; on a phone a Downloads section after Next up. The rows are marker preferences drawn by Tally |

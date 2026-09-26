@@ -190,6 +190,15 @@ class ServerRepository
             apiClient.update(baseUrl = current.server.url, accessToken = current.user.accessToken)
             withContext(WholphinDispatchers.Main) { _current.value = current }
         }
+
+        // After an offline start the user details were never fetched ([currentUserDto] is null, so [updateUserDto]
+        // keeps it null): once the server answers, set them for the signed-in user.
+        suspend fun tallyRefreshUserDto() {
+            val userDto by apiClient.userApi.getCurrentUser()
+            withContext(WholphinDispatchers.Main) {
+                if (currentUser?.id == userDto.id) _currentUserDto.value = userDto
+            }
+        }
         // TALLY: end
 
         /**

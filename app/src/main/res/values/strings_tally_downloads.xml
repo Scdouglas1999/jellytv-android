@@ -3,10 +3,6 @@
 <resources>
     <string name="tally_dl_channel_name">Downloads</string>
     <string name="tally_dl_channel_description">Progress of downloads for offline playback</string>
-    <plurals name="tally_dl_notification_many">
-        <item quantity="one">%d download</item>
-        <item quantity="other">%d downloads</item>
-    </plurals>
     <string name="tally_dl_notification_failed">%1$s: %2$s</string>
 
     <string name="tally_dl_reason_no_download">Your account is not allowed to download from this server.</string>
@@ -30,10 +26,5 @@
     <string name="tally_dl_error_space">Not enough storage: %1$s needed, %2$s free.</string>
 
     <string name="tally_dl_page_title">Downloads</string>
-    <string name="tally_dl_page_offline">Offline</string>
     <string name="tally_dl_page_empty">Nothing downloaded yet.</string>
-    <string name="tally_dl_state_done">Downloaded</string>
-    <string name="tally_dl_state_downloading">Downloading %1$d%%</string>
-    <string name="tally_dl_state_paused">Paused</string>
-    <string name="tally_dl_state_queued">Queued</string>
 </resources>
