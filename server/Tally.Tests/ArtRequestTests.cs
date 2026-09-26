@@ -1,7 +1,13 @@
+using System.Reflection;
 using System.Text.Json;
 using Jellyfin.Plugin.Tally.Dvr;
 using Jellyfin.Plugin.Tally.Scores;
 using Jellyfin.Plugin.Tally.Services;
+using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.Movies;
+using MediaBrowser.Controller.Library;
+using MediaBrowser.Model.Entities;
+using Microsoft.Extensions.Logging.Abstractions;
 using SkiaSharp;
 using Xunit;
 
@@ -123,6 +129,28 @@ public class ArtRequestTests
         Assert.NotEqual(ny, la);     // SUN 7:10 PM vs SUN 4:10 PM
         Assert.Equal(la, la2);
     }
+
+    [Fact]
+    public void A_Recording_Thumb_Shows_The_Day_And_No_Time_Of_Day()
+    {
+        // the library item's picture: every client shows it as it is, whatever its zone, so no clock time on it
+        var game = new GameInfo
+        {
+            Id = "402", Sport = "baseball", League = "MLB", State = "pre",
+            Start = new DateTimeOffset(2026, 9, 26, 18, 20, 0, TimeSpan.Zero),
+            Home = new GameTeam { Abbr = "LKH", ShortName = "Herons" },
+            Away = new GameTeam { Abbr = "ROT", ShortName = "Otters" }
+        };
+        var ny = CardArtService.RenderRecordingThumb(game, null, null, ArtRequest.Zone("America/New_York"));
+        var la = CardArtService.RenderRecordingThumb(game, null, null, ArtRequest.Zone("America/Los_Angeles"));
+        Assert.Equal(ny, la);   // 2:20 PM and 11:20 AM: the same picture, SAT SEP 26
+        Assert.Equal("SAT SEP 26", CardArtService.RecordingDay(game, ArtRequest.Zone("America/New_York")));
+        Assert.NotEqual(CardArtService.RenderMatchup(game, null, null, ArtRequest.Zone("America/New_York"), game.Start), ny);
+
+        using var bmp = SKBitmap.Decode(ny);
+        Assert.Equal(CardArtService.Width, bmp.Width);
+        Assert.Equal(CardArtService.Height, bmp.Height);
+    }
 }
 
 /// <summary>Contract 3 of 2.2: <c>libraryState</c> and the recordings library the DVR creates once.</summary>
@@ -131,11 +159,82 @@ public class RecordingLibraryTests
     [Fact]
     public void Library_State_Follows_The_Item_Then_The_Library()
     {
-        Assert.Equal("ready", RecordingLibrary.State("abc", covered: false));
+        // an item id with no library covering the file is a library that was removed: its items went with it
+        Assert.Equal("noLibrary", RecordingLibrary.State("abc", covered: false));
         Assert.Equal("ready", RecordingLibrary.State("abc", covered: true));
         Assert.Equal("adding", RecordingLibrary.State(null, covered: true));
         Assert.Equal("adding", RecordingLibrary.State(string.Empty, covered: true));
         Assert.Equal("noLibrary", RecordingLibrary.State(null, covered: false));
+    }
+
+    [Fact]
+    public void A_Recording_Keeps_Its_Item_Only_While_A_Library_Covers_It()
+    {
+        var found = 0;
+        string? Find()
+        {
+            found++;
+            return "new";
+        }
+
+        // library removed: no item, and nothing looked up (Jellyfin may still hand out the removed item from memory)
+        Assert.Null(RecordingLibrary.Reconcile("old", covered: false, _ => true, Find));
+        Assert.Equal(0, found);
+        // library there, item there: kept
+        Assert.Equal("old", RecordingLibrary.Reconcile("old", covered: true, _ => true, Find));
+        Assert.Equal(0, found);
+        // item deleted: looked up by the file again
+        Assert.Equal("new", RecordingLibrary.Reconcile("old", covered: true, _ => false, Find));
+        // no item yet (a library made since): looked up
+        Assert.Equal("new", RecordingLibrary.Reconcile(null, covered: true, _ => throw new InvalidOperationException("no id to check"), Find));
+        Assert.Null(RecordingLibrary.Reconcile(null, covered: true, _ => true, () => null));
+    }
+
+    [Fact]
+    public void Removing_The_Recordings_Library_Frees_Its_Recordings()
+    {
+        // Jellyfin removes a library's items without an ItemRemoved for each (only for the library's folders), and
+        // keeps handing out the removed items from memory: what counts is whether a library still covers the file
+        var root = Path.Combine(Path.GetTempPath(), "tally-dvr-" + Guid.NewGuid().ToString("N"));
+        var file = Path.Combine(root, "MLB", "Riverton Otters at Lakeside Herons - 2026-09-26.mp4");
+        var item = new Movie { Id = Guid.NewGuid(), Path = file };
+        var library = FakeLibrary.Create(out var fake);
+        fake.Folders.Add(new VirtualFolderInfo { Name = DvrService.LibraryName, Locations = new[] { root } });
+        fake.Items.Add(item);
+
+        var dvr = new DvrService(null!, null!, null!, null!, null!, null!, null!, library, null!, null!, null!, NullLogger<DvrService>.Instance);
+        var job = new RecordingJob
+        {
+            State = JobState.Done,
+            FilePath = file,
+            ItemId = item.Id.ToString("N"),
+            Game = new GameSnapshot { Id = "402", League = "MLB", Start = DateTimeOffset.UtcNow }
+        };
+        typeof(DvrService).GetField("_state", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .SetValue(dvr, new DvrState { Settings = new DvrSettings { Folder = root }, Jobs = { job } });
+        string Board() => dvr.ForGame("402", _ => string.Empty, dvr.LibraryStates())!.LibraryState;
+
+        Assert.Equal(item.Id.ToString("N"), dvr.Jobs.Single().ItemId);
+        Assert.Equal("ready", dvr.LibraryStates()(job));
+        Assert.Equal("ready", Board());
+
+        // the owner removes the library; the item is still found by id and by path, as in Jellyfin's memory
+        fake.Folders.Clear();
+        Assert.Null(dvr.Jobs.Single().ItemId);
+        Assert.Null(job.ItemId);
+        Assert.Equal("noLibrary", dvr.LibraryStates()(job));
+        Assert.Equal("noLibrary", Board());
+        Assert.Null(dvr.ForGame("402", _ => string.Empty)!.ItemId);
+
+        // a library covers the folder again (the same file, the same item id): ready again
+        fake.Folders.Add(new VirtualFolderInfo { Name = "Sports", Locations = new[] { root } });
+        Assert.Equal(item.Id.ToString("N"), dvr.Jobs.Single().ItemId);
+        Assert.Equal("ready", Board());
+
+        // the item alone deleted (the library stays): adding until Jellyfin has it again
+        fake.Items.Clear();
+        Assert.Null(dvr.Jobs.Single().ItemId);
+        Assert.Equal("adding", Board());
     }
 
     [Fact]
@@ -202,5 +301,38 @@ public class RecordingLibraryTests
         Assert.Contains("\"libraryAutoCreatedAt\"", json);
         Assert.Equal(at, JsonSerializer.Deserialize<DvrState>(json)!.LibraryAutoCreatedAt);
         Assert.Null(JsonSerializer.Deserialize<DvrState>("{\"jobs\":[]}")!.LibraryAutoCreatedAt);
+    }
+}
+
+/// <summary>The few <see cref="ILibraryManager"/> calls the DVR's library bookkeeping makes, over a list of libraries and
+/// items.</summary>
+public class FakeLibrary : DispatchProxy
+{
+    public List<VirtualFolderInfo> Folders { get; } = new();
+
+    public List<BaseItem> Items { get; } = new();
+
+    public static ILibraryManager Create(out FakeLibrary fake)
+    {
+        var proxy = Create<ILibraryManager, FakeLibrary>();
+        fake = (FakeLibrary)(object)proxy;
+        return proxy;
+    }
+
+    protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
+    {
+        var name = targetMethod!.Name;
+        if (name.StartsWith("add_", StringComparison.Ordinal) || name.StartsWith("remove_", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        return name switch
+        {
+            "GetVirtualFolders" => Folders.ToList(),
+            "GetItemById" when !targetMethod.IsGenericMethod => Items.FirstOrDefault(i => i.Id == (Guid)args![0]!),
+            "FindByPath" => Items.FirstOrDefault(i => i.Path == (string)args![0]!),
+            _ => throw new NotSupportedException(name)
+        };
     }
 }

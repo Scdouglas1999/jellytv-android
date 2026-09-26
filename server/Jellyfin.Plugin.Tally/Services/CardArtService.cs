@@ -251,9 +251,35 @@ public sealed class CardArtService
             return Encode(surface);
         }
 
-        var when = TimeZoneInfo.ConvertTime(g.Start, zone).ToString("ddd h:mm tt", CultureInfo.InvariantCulture).ToUpperInvariant();
+        DrawPreGame(c, g, awayLogo, homeLogo, TimeZoneInfo.ConvertTime(g.Start, zone).ToString("ddd h:mm tt", CultureInfo.InvariantCulture));
+        return Encode(surface);
+    }
+
+    /// <summary>
+    /// A recording's 16:9 thumb: the pre-game card with the game's day in the corner where a card shows the start
+    /// time. It becomes the library item's image, which every client shows as it is, in whatever zone the viewer is
+    /// in, so it carries no time of day (that would be the server's); the day is the one the recording is filed
+    /// under (its file name and NFO date, in <paramref name="zone"/>, the server's). The Tally apps show the time
+    /// under the picture in the viewer's zone.
+    /// </summary>
+    public static byte[] RenderRecordingThumb(GameInfo g, byte[]? awayLogo, byte[]? homeLogo, TimeZoneInfo zone)
+    {
+        using var surface = SKSurface.Create(new SKImageInfo(Width, Height, SKColorType.Rgba8888, SKAlphaType.Premul));
+        var c = surface.Canvas;
+        DrawGround(c);
+        DrawPreGame(c, g, awayLogo, homeLogo, RecordingDay(g, zone));
+        return Encode(surface);
+    }
+
+    /// <summary>"SAT SEP 26": the day a recording's thumb shows.</summary>
+    public static string RecordingDay(GameInfo g, TimeZoneInfo zone)
+        => TimeZoneInfo.ConvertTime(g.Start, zone).ToString("ddd MMM d", CultureInfo.InvariantCulture).ToUpperInvariant();
+
+    /// <summary>Pre-game layout: league and <paramref name="corner"/> on top, both teams, the networks below.</summary>
+    private static void DrawPreGame(SKCanvas c, GameInfo g, byte[]? awayLogo, byte[]? homeLogo, string corner)
+    {
         DrawText(c, g.League.ToUpperInvariant(), Mono.Value, 34, Accent, 64, 104, SKTextAlign.Left, 560);
-        DrawText(c, when, Mono.Value, 34, Text, Width - 64, 104, SKTextAlign.Right, 560);
+        DrawText(c, corner.ToUpperInvariant(), Mono.Value, 34, Text, Width - 64, 104, SKTextAlign.Right, 560);
 
         DrawSide(c, g.Away, awayLogo, 340);
         DrawSide(c, g.Home, homeLogo, 940);
@@ -263,8 +289,6 @@ public sealed class CardArtService
         {
             DrawText(c, string.Join("  ·  ", g.Broadcasts.Take(3)).ToUpperInvariant(), Mono.Value, 28, Muted, Width / 2f, 668, SKTextAlign.Center, 1100);
         }
-
-        return Encode(surface);
     }
 
     /// <summary>In-progress layout: the score is the headline, with clock, top heat tag and an honest
@@ -300,17 +324,38 @@ public sealed class CardArtService
         DrawText(c, asOf, Mono.Value, 24, Muted, Width / 2f, 690, SKTextAlign.Center, 400);
     }
 
-    /// <summary>Artwork for a recorded game (the DVR): a 16:9 thumb (the pre-game matchup card: logos, names, league,
-    /// date and time) and a 2:3 poster. Neither ever shows a score: the game is drawn as not yet started.</summary>
+    /// <summary>Artwork for a recorded game (the DVR): a 16:9 thumb (the pre-game matchup card: logos, names, league
+    /// and the day, see <see cref="RenderRecordingThumb"/>) and a 2:3 poster. Neither ever shows a score: the game is
+    /// drawn as not yet started. <paramref name="zone"/> is the server's, the one the recording's date is in.</summary>
     public async Task<(byte[] Thumb, byte[] Poster)> RenderRecordingArtAsync(GameInfo scoreless, TimeZoneInfo zone, CancellationToken ct)
     {
         var away = await GetDarkLogoAsync(scoreless.Away.Logo, ct).ConfigureAwait(false);
         var home = await GetDarkLogoAsync(scoreless.Home.Logo, ct).ConfigureAwait(false);
-        var game = scoreless.Clone();
+        var game = Scoreless(scoreless);
+        return (RenderRecordingThumb(game, away, home, zone), RenderPoster(game, away, home, zone));
+    }
+
+    /// <summary>A recording's thumb drawn again (recordings made before thumbs lost their time of day), or null when a
+    /// team's logo cannot be fetched right now, so a picture with logos is not replaced by one without.</summary>
+    public async Task<byte[]?> RedrawRecordingThumbAsync(GameInfo scoreless, TimeZoneInfo zone, CancellationToken ct)
+    {
+        var away = await GetDarkLogoAsync(scoreless.Away.Logo, ct).ConfigureAwait(false);
+        var home = await GetDarkLogoAsync(scoreless.Home.Logo, ct).ConfigureAwait(false);
+        if ((away == null && IsLogoUrl(scoreless.Away.Logo)) || (home == null && IsLogoUrl(scoreless.Home.Logo)))
+        {
+            return null;
+        }
+
+        return RenderRecordingThumb(Scoreless(scoreless), away, home, zone);
+    }
+
+    private static GameInfo Scoreless(GameInfo g)
+    {
+        var game = g.Clone();
         game.State = "pre";
         game.Away.Score = null;
         game.Home.Score = null;
-        return (RenderMatchup(game, away, home, zone, DateTimeOffset.UtcNow), RenderPoster(game, away, home, zone));
+        return game;
     }
 
     public const int PosterWidth = 1000;
@@ -489,14 +534,19 @@ public sealed class CardArtService
             ?? await GetLogoAsync(url, ct).ConfigureAwait(false);
     }
 
+    /// <summary>Only the scoreboard's own logo CDN is ever fetched: the URL comes out of third-party JSON.</summary>
+    private static bool IsLogoUrl(string? url)
+        => Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps
+           && uri.Host.EndsWith(".espncdn.com", StringComparison.OrdinalIgnoreCase);
+
     private async Task<byte[]?> GetLogoAsync(string url, CancellationToken ct)
     {
-        // only ever fetch the scoreboard's own logo CDN — this URL comes out of third-party JSON
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps
-            || !uri.Host.EndsWith(".espncdn.com", StringComparison.OrdinalIgnoreCase))
+        if (!IsLogoUrl(url))
         {
             return null;
         }
+
+        var uri = new Uri(url);
 
         if (_logos.TryGetValue(url, out var cached))
         {

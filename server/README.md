@@ -201,7 +201,8 @@ time) and follows the live ladder's continuous playlist through source switches.
   cancel (what was recorded is kept).
 - **Finish**: Jellyfin's own ffmpeg remuxes the segments (stream copy, no transcode) into
   `<recordings>/<League>/<Away> at <Home> - <yyyy-MM-dd>.mp4`, with an NFO (title "Away at Home", date, league,
-  teams, never the score) and poster, backdrop and thumb art drawn from the game, then the plugin adds it to the library
+  teams, never the score) and poster, backdrop and thumb art drawn from the game (the date, never a time of day: every
+  Jellyfin client shows the item's pictures as they are, whatever its time zone), then the plugin adds it to the library
   that covers the recordings folder (it scans just that folder, first adding the library folder itself if Jellyfin
   skipped it for being empty), so the item appears within seconds and the job (and the game on the board) carries its
   `itemId`. A file Jellyfin picks up later (a library created afterwards, a scan) is noted on the job as soon as it is
@@ -225,7 +226,8 @@ time) and follows the live ladder's continuous playlist through source switches.
   the **Sports Recordings** library itself (a Movies library with every internet metadata and image fetcher off, so
   the NFO and art stay) and logs it. It does that once: if the owner removes that library, it is not created again.
   Settings → Recordings says when no library covers the folder and offers **Create a Sports Recordings library**. A
-  library made by hand works too.
+  library made by hand works too. Recordings whose library is removed lose their library item (`noLibrary`) and get it
+  back when a library covers the folder again.
 
 Client API v1 (authenticated): `GET /JellyTV/Client/v1/recordings` (rules and jobs, and whether the caller may
 record), `POST /JellyTV/Client/v1/recordings` with `{"gameId": "…"}` or `{"teamId": "…", "league": "baseball/mlb"
