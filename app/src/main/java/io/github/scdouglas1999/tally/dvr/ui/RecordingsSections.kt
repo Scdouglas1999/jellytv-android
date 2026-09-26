@@ -4,6 +4,7 @@ import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,6 +40,37 @@ data class RecordingsSections(
 ) {
     val isEmpty: Boolean
         get() = recordingNow.isEmpty() && scheduled.isEmpty() && recorded.isEmpty() && failed.isEmpty() && rules.isEmpty()
+
+    /** The keys of the focusable entries (job and rule ids), top to bottom, as the TV list draws them. */
+    fun focusOrder(): List<String> = (recordingNow + scheduled + recorded + failed).map { it.id } + rules.map { it.id }
+
+    /**
+     * The lazy item each entry of the TV list is drawn in: the storage line, the empty state (only when empty),
+     * then each section's header and rows; RECORDED is a header and one row of cards.
+     */
+    fun lazyIndices(): Map<String, Int> {
+        val indices = HashMap<String, Int>()
+        var next = if (isEmpty) 2 else 1
+        for (section in listOf(recordingNow, scheduled)) {
+            if (section.isEmpty()) continue
+            next++
+            section.forEach { indices[it.id] = next++ }
+        }
+        if (recorded.isNotEmpty()) {
+            next++
+            recorded.forEach { indices[it.id] = next }
+            next++
+        }
+        if (failed.isNotEmpty()) {
+            next++
+            failed.forEach { indices[it.id] = next++ }
+        }
+        if (rules.isNotEmpty()) {
+            next++
+            rules.forEach { indices[it.id] = next++ }
+        }
+        return indices
+    }
 
     companion object {
         fun of(list: DvrList): RecordingsSections =
@@ -167,6 +199,8 @@ fun RecordingsTabEffects(viewModel: DvrViewModel) {
         viewModel.setPolling(true)
         onDispose { viewModel.setPolling(false) }
     }
+    val libraryNotice by viewModel.libraryNotice.collectAsState()
+    libraryNotice?.let { RecordingLibraryNotice(it, onDismiss = viewModel::dismissLibraryNotice) }
     LaunchedEffect(viewModel) {
         viewModel.notices.collect { notice ->
             val text =
@@ -179,16 +213,13 @@ fun RecordingsTabEffects(viewModel: DvrViewModel) {
     }
 }
 
-/** Plays a finished recording, or says it is still being added to the library. */
+/**
+ * Plays a finished recording, or says why it cannot be played yet (still being added to the library, or no library
+ * for recordings on the server): the notice [RecordingsTabEffects] shows.
+ */
+@Suppress("UNUSED_PARAMETER")
 fun playRecorded(
     viewModel: DvrViewModel,
     job: DvrJob,
     context: android.content.Context,
-) {
-    val itemId = job.itemId
-    if (itemId == null) {
-        Toast.makeText(context, R.string.tally_dvr_not_in_library_yet, Toast.LENGTH_SHORT).show()
-    } else {
-        viewModel.playRecording(itemId)
-    }
-}
+) = viewModel.playFinished(job)

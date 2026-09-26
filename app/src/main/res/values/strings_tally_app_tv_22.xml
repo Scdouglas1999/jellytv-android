@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Tally 2.2 app fixes (app-tv-22). American English. -->
+<resources>
+    <!-- A finished recording that has no library item yet (the plugin's libraryState) -->
+    <string name="tally_dvr_not_ready_kicker">Can\'t play yet</string>
+    <string name="tally_dvr_still_adding">Still being added to the library. Try again in a minute.</string>
+    <string name="tally_dvr_no_library">This server has no library for recordings yet. Its owner can add one under Settings → Recordings.</string>
+    <string name="tally_dvr_notice_ok">OK</string>
+</resources>
