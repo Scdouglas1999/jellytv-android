@@ -263,6 +263,51 @@ async function filmOnWebos(page: Page, info: import('@playwright/test').TestInfo
   await lgKey(page, 415);
   await expect.poll(() => page.evaluate(() => document.querySelector('video')?.paused)).toBe(false);
 
+  // the Magic Remote in the player: with the controls hidden, moving the pointer brings them up; the pointer on
+  // AUDIO focuses it and a click opens its panel (found on LG's webOS 5 emulator: the controls hid under the pointer)
+  for (let i = 0; i < 3 && (await page.locator('.pc-row').isVisible()); i++) {
+    await lgKey(page, 461);
+    await page.waitForTimeout(300);
+  }
+  await expect(page.locator('.pc-row')).toBeHidden();
+  await page.mouse.move(960, 400, { steps: 3 });
+  await expect(page.locator('.pc-row')).toBeVisible();
+  const audio = await page.evaluate(() => {
+    const cap = Array.from(document.querySelectorAll('.pc-cap')).find((c) => c.textContent === 'AUDIO');
+    const r = cap?.previousElementSibling?.getBoundingClientRect();
+    return r === undefined ? null : { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  });
+  expect(audio).not.toBeNull();
+  if (audio !== null) {
+    await page.mouse.move(audio.x, audio.y, { steps: 3 });
+    expect(await caption()).toBe('AUDIO');
+    await page.mouse.click(audio.x, audio.y);
+    await expect(page.locator('.pc-sidepanel .kicker')).toHaveText('AUDIO');
+    // BACK: the audio list, then the settings it belongs to
+    for (let i = 0; i < 3 && (await page.locator('.pc-sidepanel').isVisible()); i++) {
+      await lgKey(page, 461);
+      await page.waitForTimeout(300);
+    }
+    await expect(page.locator('.pc-sidepanel')).toBeHidden();
+    // the controls hidden again, the pointer goes straight to where AUDIO is: they come up under it with PLAY
+    // focused, and a click there is AUDIO, not PLAY (OK only once the focus moved; the film paused on the emulator)
+    for (let i = 0; i < 3 && (await page.locator('.pc-row').isVisible()); i++) {
+      await lgKey(page, 461);
+      await page.waitForTimeout(300);
+    }
+    await expect(page.locator('.pc-row')).toBeHidden();
+    await page.mouse.move(audio.x + 2, audio.y + 1);
+    await expect(page.locator('.pc-row')).toBeVisible();
+    await page.mouse.click(audio.x + 2, audio.y + 1);
+    await expect(page.locator('.pc-sidepanel .kicker')).toHaveText('AUDIO');
+    expect(await page.evaluate(() => document.querySelector('video')?.paused)).toBe(false);
+    for (let i = 0; i < 3 && (await page.locator('.pc-sidepanel').isVisible()); i++) {
+      await lgKey(page, 461);
+      await page.waitForTimeout(300);
+    }
+    await expect(page.locator('.pc-sidepanel')).toBeHidden();
+  }
+
   // leaving the player lets the screensaver come again
   await lgKey(page, 413); // STOP
   await expect(page.locator('.page:not(.hidden) .home')).toBeVisible();
@@ -315,9 +360,14 @@ test('webOS: the Magic Remote pointer: hover focuses, click is OK, the wheel ste
   // a click on a library card is OK on it: its page opens
   const card = cards.nth(0);
   await card.scrollIntoViewIfNeeded();
-  at = await center(card);
-  await page.mouse.move(at.x, at.y, { steps: 3 });
-  await expect(card).toHaveAttribute('data-focused', /.*/);
+  // Continue Watching can reorder right after Home comes up (the previous test's film): hover the first card again
+  // until it holds the frame (a pointer that does not move does not focus, so each try moves a pixel)
+  let nudge = 0;
+  await expect(async () => {
+    at = await center(card);
+    await page.mouse.move(at.x - 3 + (nudge++ % 3), at.y, { steps: 3 });
+    await expect(card).toHaveAttribute('data-focused', /.*/, { timeout: 1000 });
+  }).toPass({ timeout: 15_000 });
   const stack = () => page.evaluate(() => (window as unknown as { TallyDebug: { stack: { get(): unknown[] } } }).TallyDebug.stack.get().length);
   const depth = await stack();
   await page.mouse.click(at.x, at.y);

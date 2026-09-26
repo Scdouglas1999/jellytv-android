@@ -12,10 +12,14 @@
  *  - The wheel steps focus up and down, one row per notch (lists scroll in the wheel's direction).
  *  - `cursorStateChange` (detail.visibility, webOS 2+; the system-ui-visibility guide) says whether the pointer is
  *    showing: `html.pointer-mode` while it is. An arrow key hides it (the TV switches to 5-way mode).
+ *  - Moving the pointer, or clicking where nothing can be focused, is activity (`usePointerActivity`): the player's
+ *    controls come up and stay up as they do for a key (on LG's webOS 5 emulator they had hidden under a pointer
+ *    that was about to click them, and a click on the picture did nothing).
  * Everything goes through the key router as the remote's own keys would (synthetic key events), so dialogs, the
  * players and HOLD handling see a click exactly as an OK press.
  */
-import { currentFocusKey, focusKeyAt, focusableAt, setFocus } from '../focus/focus';
+import { useEffect, useRef } from 'preact/hooks';
+import { currentFocusKey, focusKeyAt, focusableAt, setFocus, setFocusThen } from '../focus/focus';
 
 /** A click this soon after an OK key is the same press (webOS sends both on some models). */
 const CLICK_AFTER_KEY_MS = 400;
@@ -39,6 +43,29 @@ export function remoteKey(target: Window, key: string): void {
     Object.defineProperty(event, 'which', { get: () => code });
     target.dispatchEvent(event);
   }
+}
+
+const activity: Array<{ current: () => void }> = [];
+
+function pointerActivity(): void {
+  for (const listener of activity.slice()) listener.current();
+}
+
+/**
+ * `onActivity` whenever the pointer moves or clicks where nothing can be focused, while `enabled` (a screen whose
+ * controls hide, as the player's: moving the Magic Remote brings them up, as LG's own players do).
+ */
+export function usePointerActivity(onActivity: () => void, enabled = true): void {
+  const ref = useRef(onActivity);
+  ref.current = onActivity;
+  useEffect(() => {
+    if (!enabled) return undefined;
+    activity.push(ref);
+    return () => {
+      const i = activity.indexOf(ref);
+      if (i >= 0) activity.splice(i, 1);
+    };
+  }, [enabled]);
 }
 
 export function setPointerMode(on: boolean): void {
@@ -67,6 +94,7 @@ export function installPointer(options: PointerOptions = {}): () => void {
     lastX = e.clientX;
     lastY = e.clientY;
     setPointerMode(true);
+    pointerActivity();
     const at = focusableAt(e.target as Element | null);
     if (at === null || at.key === currentFocusKey()) return;
     const r = at.node.getBoundingClientRect();
@@ -94,18 +122,27 @@ export function installPointer(options: PointerOptions = {}): () => void {
 
   const onClick = (e: MouseEvent): void => {
     const key = clicked(e);
-    if (key === null) return;
+    if (key === null) {
+      pointerActivity();
+      return;
+    }
     // the click is OK here and nowhere else: the kit's own onClick (for desktop mice) would open the page again
     e.preventDefault();
     e.stopPropagation();
     if (now() - lastOkKey < CLICK_AFTER_KEY_MS) return;
-    if (key !== currentFocusKey()) setFocus(key);
-    synthetic = true;
-    try {
-      remoteKey(target, 'Enter');
-    } finally {
-      synthetic = false;
-    }
+    const ok = (): void => {
+      synthetic = true;
+      try {
+        remoteKey(target, 'Enter');
+      } finally {
+        synthetic = false;
+      }
+    };
+    // OK only once the focus is on what was clicked (Norigin moves it a microtask later): the player's controls
+    // coming up under a pointer that did not move had PLAY focused, and the click on AUDIO paused the film (LG's
+    // webOS 5 emulator)
+    if (key !== currentFocusKey()) setFocusThen(key, ok);
+    else ok();
   };
 
   const onWheel = (e: WheelEvent): void => {

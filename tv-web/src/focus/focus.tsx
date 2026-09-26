@@ -69,6 +69,14 @@ export function setFocus(focusKey: string): void {
   void SpatialNavigation.setFocus(focusKey);
 }
 
+/**
+ * `setFocus`, then `then` once the focus is there: Norigin moves focus a microtask later (setFocus awaits the next
+ * focus key), so a key sent right after `setFocus` still goes to the old focus.
+ */
+export function setFocusThen(focusKey: string, then: () => void): void {
+  SpatialNavigation.setFocus(focusKey).then(then, then);
+}
+
 export function currentFocusKey(): string {
   return SpatialNavigation.getCurrentFocusKey();
 }
