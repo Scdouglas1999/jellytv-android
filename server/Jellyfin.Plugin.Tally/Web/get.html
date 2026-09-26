@@ -62,8 +62,8 @@ a { color: var(--accent); }
   <div class="k">What kind of TV is it?</div>
   <div class="picker" role="group" aria-label="TV type">
     <button type="button" data-tv="android" aria-pressed="true">Google TV, Fire TV, Android TV <span>Chromecast, Fire Stick, Shield, onn, Sony, TCL, Hisense</span></button>
-    <button type="button" data-tv="web" aria-pressed="false">LG or Xbox <span>nothing special to install</span></button>
-    <button type="button" data-tv="apple" aria-pressed="false">Apple TV, Samsung or Roku <span>pick games on your phone, watch on the TV</span></button>
+    <button type="button" data-tv="tvweb" aria-pressed="false">Samsung or LG, 2020 or newer <span>installed once from a computer, about 20 minutes</span></button>
+    <button type="button" data-tv="other" aria-pressed="false">Apple TV, Roku, Xbox or an older TV <span>pick games on your phone, watch on the TV</span></button>
   </div>
 
   <section data-for="android">
@@ -107,20 +107,29 @@ a { color: var(--accent); }
     <div class="note"><strong>Updates.</strong> When a new version is out, Tally opens an update screen by itself: press <strong>Download &amp; Update</strong>, then <strong>Update</strong>, and open Tally again. The very first time, the TV asks once more to allow installs, this time for Tally: choose Settings, switch <strong>Tally</strong> on, press Back twice and press Download &amp; Update again. You can delete Downloader afterwards; it is not needed again.</div>
   </section>
 
-  <section data-for="web" hidden>
+  <section data-for="tvweb" hidden>
+    <p>Samsung and LG TVs can't install apps from a phone, so Tally goes on from a computer on the same Wi-Fi as the TV. You do it once; after that, Tally updates itself from this server.</p>
     <ol>
-      <li><p>On the TV, open the app store, install <strong>Jellyfin</strong> and open it.</p></li>
       <li>
-        <p>Enter this server address and sign in:</p>
+        <p>On the computer, open the guide for your TV and follow it:</p>
+        <div class="send">
+          <a class="send-btn" href="https://github.com/Scdouglas1999/Tally/blob/main/INSTALL.md#samsung-tvs" target="_blank" rel="noopener">Samsung guide<span>2020 or newer; 2023 and newer need a free Samsung account</span></a>
+          <a class="send-btn" href="https://github.com/Scdouglas1999/Tally/blob/main/INSTALL.md#lg-tvs" target="_blank" rel="noopener">LG guide<span>2020 or newer; needs a free LG developer account</span></a>
+        </div>
+      </li>
+      <li>
+        <p>When the installer asks for the server, type:</p>
         <div class="type-this"><code>{{SERVER}}</code></div>
       </li>
-      <li><p>Open <strong>Live TV</strong>. That is JellyTV.</p></li>
+      <li>
+        <p>Tally opens on the TV with a <strong>6-digit code</strong>. On this phone, open <a href="{{SERVER}}/web/#/quickconnect">Quick Connect</a>, sign in if it asks, type the code and press <strong>Authorize</strong>.</p>
+      </li>
     </ol>
   </section>
 
-  <section data-for="apple" hidden>
+  <section data-for="other" hidden>
     <ol>
-      <li><p>On the TV, install <strong>Swiftfin</strong> (Apple TV) or <strong>Jellyfin</strong> (Samsung, Roku) from its app store.</p></li>
+      <li><p>On the TV, install <strong>Swiftfin</strong> (Apple TV) or <strong>Jellyfin</strong> (Roku, Xbox, older Samsung and LG TVs) from its app store.</p></li>
       <li>
         <p>Enter this server address and sign in:</p>
         <div class="type-this"><code>{{SERVER}}</code></div>
