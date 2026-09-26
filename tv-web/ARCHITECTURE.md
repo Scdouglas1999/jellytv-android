@@ -238,7 +238,7 @@ multiview tiles), `createEngine.ts`, `deviceProfile.ts`, `playback.ts` (Playback
   hls.js, a TV never does.
 - **Live overlays** (`pages/player/LivePage.tsx`, `liveOverlays.tsx`; tvweb-sports), as on the Android TV live player
   (TallyPlaybackPage.kt): the **score bug** (back on open, on every score/period/situation change, while the
-  switcher is up and for 8 s after a key, then it fades; hidden under the box score; drawn above the bars, as Android
+  switcher is up and for 8 s after a key or a Magic Remote pointer move, which also brings the bar, then it fades; hidden under the box score; drawn above the bars, as Android
   draws it over its controls; its digits roll), **UP** = the box score (line score, situation, last
   play; closes on the next key or after 12 s), **DOWN** = the "also on now" switcher (other live games on channels
   in board order, or the looping channels when none is live; OK switches in place, HOLD opens the game's actions),

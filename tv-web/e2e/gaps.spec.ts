@@ -353,6 +353,7 @@ test("Live: the score bug follows Android's rule (open, score change, key; 8 s; 
     const shownAt = Date.now();
     await expect(page.locator('.live-bar')).toHaveCount(0);
     await expect(bug.locator('.line1')).not.toHaveText(before);
+    await page.waitForTimeout(900); // past the fade-in and the digit roll
     await shot(page, info, 'gaps-live-bug-score-change');
     await expect.poll(faded, { timeout: 12_000 }).toBe(true);
     expect(Date.now() - shownAt).toBeGreaterThan(7_000);
@@ -432,9 +433,12 @@ test('Plugin art: game backdrops and channel cards ask for their drawn width and
   test.skip(board.channels.length === 0, 'no channels');
   const zone = await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
   const cards = page.waitForRequest((r) => r.url().includes('/JellyTV/Card/'));
+  // listening before Home opens: the backdrop can be asked for while Home is still settling (a busy machine)
+  const backdrops = page.waitForRequest((r) => r.url().includes('/JellyTV/Backdrop/'), { timeout: 40_000 });
+  backdrops.catch(() => undefined);
   await home(page);
   if ((await page.locator('.home .game-card[data-focused]').count()) > 0) {
-    const backdrop = await page.waitForRequest((r) => r.url().includes('/JellyTV/Backdrop/'), { timeout: 10_000 });
+    const backdrop = await backdrops;
     const u = new URL(backdrop.url());
     expect(u.searchParams.get('w')).toBe('1400');
     expect(u.searchParams.get('tz')).toBe(zone);

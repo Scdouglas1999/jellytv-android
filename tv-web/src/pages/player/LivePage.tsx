@@ -9,6 +9,7 @@ import { Button } from '../../kit/Button';
 import { ToastHost } from '../../kit/Toast';
 import { RecordingNoticeHost } from '../sports/RecordingNotice';
 import { useKeyHandler } from '../../platform/keyRouter';
+import { usePointerActivity } from '../../platform/pointer';
 import { back, replace, type Route } from '../../router/router';
 import { boardRows, gameForChannel } from '../../sports/boardOrganizer';
 import { KeyHint, matchupTitle } from '../../sports/SportsBits';
@@ -298,6 +299,17 @@ export function LivePage(props: PageProps<Extract<Route, { name: 'live' }>>) {
         showBar();
         return true;
     }
+  }, props.active);
+
+  // LG's Magic Remote: moving the pointer (or clicking the picture) brings the bar up and keeps it up, and the bug with
+  // it, as a key does (the bug's clock moves at most once a second: the pointer sends a move per frame)
+  const pointerAt = useRef(0);
+  usePointerActivity(() => {
+    showBar();
+    const now = Date.now();
+    if (now - pointerAt.current < 1000) return;
+    pointerAt.current = now;
+    setBugShownAt(now);
   }, props.active);
 
   const barUp = bar && !switcher && !boxScore;
