@@ -72,13 +72,16 @@ public sealed class WebosTv(ITvConnection connection)
         }
 
         InstallProgress? last = null;
+        var shown = "";
         var log = await Connection.RunAsync(Luna.Command(Luna.Install, Luna.InstallParams(appId, path), subscribe: true), line =>
         {
             foreach (var reply in Luna.Replies(line))
             {
                 last = InstallProgress.From(reply);
-                if (last.State == InstallState.Working && last.Text.Length > 0)
+                // the TV repeats a state several times (LG's webOS 5 emulator: "ipk verifying" three times): once is enough
+                if (last.State == InstallState.Working && last.Text.Length > 0 && last.Text != shown)
                 {
+                    shown = last.Text;
                     onProgress?.Invoke(last.Text);
                 }
 

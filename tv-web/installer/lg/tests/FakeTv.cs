@@ -65,7 +65,12 @@ public sealed class FakeTv : ITvConnection
             }
 
             yield return "{\"subscribed\":true,\"returnValue\":true}";
-            yield return "{\"id\":\"com.ares.defaultName\",\"statusValue\":35,\"details\":{\"installBasePath\":\"/media/developer\",\"simpleStatus\":\"install\",\"state\":\"ipk parsing\"},\"returnValue\":true}";
+            // LG's webOS 5 emulator sends each state several times
+            for (var i = 0; i < 3; i++)
+            {
+                yield return "{\"id\":\"com.ares.defaultName\",\"statusValue\":35,\"details\":{\"installBasePath\":\"/media/developer\",\"simpleStatus\":\"install\",\"state\":\"ipk parsing\"},\"returnValue\":true}";
+            }
+
             yield return "{\"id\":\"com.ares.defaultName\",\"statusValue\":36,\"details\":{\"packageId\":\"io.github.scdouglas1999.tally\",\"state\":\"installing\"},\"returnValue\":true}";
             yield return InstallEnd;
             // a subscription keeps going until the client stops listening
