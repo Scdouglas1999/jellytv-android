@@ -1,6 +1,6 @@
 /**
  * The 2.2 gaps (tvweb-gaps): the collection and playlist pages, Remove from continue watching, the live player's
- * FROM THE START button and always-on score bug, the league in Home's game header, the recording notice (plugin
+ * FROM THE START button and the score bug's show/fade rule, the league in Home's game header, the recording notice (plugin
  * contract 3) and the plugin art parameters (contracts 1 and 2). Against the dev server; server state is put back.
  */
 import { expect, test, type Page } from '@playwright/test';
@@ -284,13 +284,19 @@ test("Home: a game's header names its league (MLB · TOP 1ST), as Android's Tall
   await shot(page, info, 'gaps-home-game-header');
 });
 
+/** Runs the score simulator (tally/dev/score-sim.py in its container), when the run has it (TALLY_SIM=1). */
+async function sim(args: string): Promise<void> {
+  const { execSync } = await import('node:child_process');
+  execSync(`docker exec tally-score-sim python /sim.py ${args}`, { stdio: 'ignore' });
+}
+
 /** A live game on a channel, and the board with that game recording (the dev server cannot record: too little space). */
 async function liveGame(): Promise<BoardGame | null> {
   const board = await api<{ games: BoardGame[] }>('/JellyTV/Client/v1/board');
   return board.games.find((g) => g.state === 'in' && g.watch != null && g.watch.hlsPath !== '') ?? null;
 }
 
-test('Live: the score bug stays up (controls up or not, hidden only under the box score); FROM THE START in the bar', async ({ page }, info) => {
+test("Live: the score bug follows Android's rule (open, score change, key; 8 s; not under the box score), over the controls; FROM THE START in the bar", async ({ page }, info) => {
   const game = await liveGame();
   test.skip(game === null, 'needs a live game on a channel (a real one, or tally/dev/score-sim.py)');
   if (game === null || game.watch == null) return;
@@ -323,12 +329,36 @@ test('Live: the score bug stays up (controls up or not, hidden only under the bo
   expect(onTop).toBe(true);
   await page.waitForTimeout(500);
   await shot(page, info, 'gaps-live-bar-start-over');
-  // no key for longer than the old 8 s linger and the bar's 5 s: the bug is still there, the bar gone
-  await page.waitForTimeout(9500);
+  // Android's rule (TallyPlaybackPage.kt): no key for longer than BUG_LINGER_MS (8 s): the bug fades out, the bar is gone
+  const faded = async (): Promise<boolean> => (await bug.getAttribute('class'))?.indexOf('faded') !== -1;
+  await expect.poll(faded, { timeout: 12_000 }).toBe(true);
   await expect(page.locator('.live-bar')).toHaveCount(0);
+  await page.waitForTimeout(600);
+  expect(await bug.evaluate((el) => getComputedStyle(el).opacity)).toBe('0');
+  await shot(page, info, 'gaps-live-bug-faded');
+  // a key brings it back (and the bar); 8 s after the last key it fades again
+  await page.keyboard.press('ArrowLeft');
   await expect(bug).not.toHaveClass(/faded/);
-  expect(await bug.evaluate((el) => getComputedStyle(el).opacity)).toBe('1');
-  await shot(page, info, 'gaps-live-bug-idle');
+  const keyAt = Date.now();
+  await expect.poll(faded, { timeout: 12_000 }).toBe(true);
+  const lingered = Date.now() - keyAt;
+  expect(lingered).toBeGreaterThan(7_500);
+  expect(lingered).toBeLessThan(10_500);
+  if (process.env.TALLY_SIM === '1') {
+    // a run in this game with the controls hidden: the bug comes back by itself, the score rolls, and fades 8 s later
+    await expect(page.locator('.live-bar')).toHaveCount(0);
+    const before = (await bug.locator('.line1').textContent()) ?? '';
+    await sim(`bump ${game.away.abbr}`);
+    await expect.poll(faded, { timeout: 60_000 }).toBe(false);
+    const shownAt = Date.now();
+    await expect(page.locator('.live-bar')).toHaveCount(0);
+    await expect(bug.locator('.line1')).not.toHaveText(before);
+    await shot(page, info, 'gaps-live-bug-score-change');
+    await expect.poll(faded, { timeout: 12_000 }).toBe(true);
+    expect(Date.now() - shownAt).toBeGreaterThan(7_000);
+  }
+  await page.keyboard.press('ArrowLeft');
+  await expect(bug).not.toHaveClass(/faded/);
   // UP: the box score covers the bug; the next key closes it and the bug is back
   await page.keyboard.press('ArrowUp');
   await expect(page.locator('.box-score')).toBeVisible();

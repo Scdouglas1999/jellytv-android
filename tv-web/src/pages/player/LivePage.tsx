@@ -22,6 +22,8 @@ import { BoxScoreOverlay, EventBanner, GameSwitcher, ScoreBug, switcherKey } fro
 import { TuneIn, useEngine } from './playerKit';
 
 const BAR_MS = 5000;
+/** The score bug stays this long after it was brought back (a change, a key): Android's BUG_LINGER_MS. */
+const BUG_LINGER_MS = 8000;
 /** The box score closes itself after this long without a key. */
 const BOX_SCORE_LINGER_MS = 12_000;
 /** An event banner stays this long. */
@@ -112,6 +114,8 @@ export function LivePage(props: PageProps<Extract<Route, { name: 'live' }>>) {
   const [boxScore, setBoxScore] = useState(false);
   const [switcher, setSwitcher] = useState(false);
   const [actionsGameId, setActionsGameId] = useState<string | null>(null);
+  const [bugShownAt, setBugShownAt] = useState(Date.now());
+  const [bugVisible, setBugVisible] = useState(true);
   const [banner, setBanner] = useState<TallyEvent | null>(null);
   const [bannerOn, setBannerOn] = useState(false);
 
@@ -127,6 +131,7 @@ export function LivePage(props: PageProps<Extract<Route, { name: 'live' }>>) {
     engine.stop();
     void engine.load({ url: absolute(props.route.hlsPath), kind: 'hls', live: true, startMs: 0 }).catch(() => undefined);
     showBar();
+    setBugShownAt(Date.now());
     return () => window.clearTimeout(barTimer.current);
   }, [props.route.hlsPath]);
 
@@ -146,6 +151,18 @@ export function LivePage(props: PageProps<Extract<Route, { name: 'live' }>>) {
     const t = window.setTimeout(() => setBoxScore(false), BOX_SCORE_LINGER_MS);
     return () => window.clearTimeout(t);
   }, [boxScore]);
+
+  // the bug (TallyPlaybackPage.kt): back when the game opens, when the score, period or situation changes, while the
+  // switcher is up, and for 8 s after any key; hidden under the box score. Always drawn and faded with opacity, so a
+  // change that brings it back can roll the digits it already showed.
+  const bugKey = game !== null ? `${game.away.score}-${game.home.score}|${game.detail}|${game.downDistance ?? ''}` : '';
+  useEffect(() => setBugShownAt(Date.now()), [bugKey]);
+  useEffect(() => {
+    setBugVisible(!boxScore);
+    if (switcher || boxScore) return undefined;
+    const t = window.setTimeout(() => setBugVisible(false), BUG_LINGER_MS);
+    return () => window.clearTimeout(t);
+  }, [bugShownAt, switcher, boxScore]);
 
   // if every other picture leaves the air while the switcher is up, close it
   useEffect(() => {
@@ -177,6 +194,7 @@ export function LivePage(props: PageProps<Extract<Route, { name: 'live' }>>) {
   const openSwitcher = (): void => {
     setSwitcher(true);
     setBar(false);
+    setBugShownAt(Date.now());
     window.setTimeout(() => {
       const first = switcherGames[0];
       if (first !== undefined) setFocus(switcherKey(first));
@@ -224,6 +242,7 @@ export function LivePage(props: PageProps<Extract<Route, { name: 'live' }>>) {
 
   useKeyHandler((key) => {
     if (actionsGameId !== null) return false; // the menu's own handler (registered later) runs first
+    setBugShownAt(Date.now());
     if (boxScore) {
       // any key closes the box score; UP and BACK stop there, everything else also reaches the player
       setBoxScore(false);
@@ -296,7 +315,7 @@ export function LivePage(props: PageProps<Extract<Route, { name: 'live' }>>) {
     <div class="player live">
       <div ref={host} />
       <TuneIn key={props.route.channelId} title={props.route.title} firstFrame={player.firstFrame} error={player.error} />
-      <ScoreBug game={game} hideScores={hideScores} visible={!boxScore} />
+      <ScoreBug game={game} hideScores={hideScores} visible={bugVisible && !boxScore} />
       {boxScore && game !== null ? <BoxScoreOverlay game={game} hideScores={hideScores} /> : null}
       {banner !== null ? <EventBanner event={banner} visible={bannerOn} onGone={() => setBanner((b) => (bannerOn ? b : null))} /> : null}
       {barUp ? (

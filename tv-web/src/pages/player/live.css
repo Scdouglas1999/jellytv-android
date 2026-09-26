@@ -1,7 +1,8 @@
 /* The live player's Tally overlays (ui/player/*.kt, TallyPlaybackPage.kt) at 1080p: Android dp × 1.6. Scoped to
    `.player.live` so they win over player.css's placeholders. */
 
-/* ---- Score bug (ScoreBug.kt): top-end, 27dp + 64dp down; over the controls (drawn after them on Android) ---- */
+/* ---- Score bug (ScoreBug.kt): top-end, 27dp + 64dp down; over the controls (drawn after them on Android); fades in
+   in OVERLAY_ANIM_MS (140 ms), out in three times that ---- */
 .player.live .score-bug {
   position: absolute; z-index: 2; right: 77px; top: 146px; padding: 13px 22px; text-align: right; background: rgba(0, 0, 0, 0.7);
   border: var(--hairline) solid #5a5d57; transition: opacity 140ms linear;

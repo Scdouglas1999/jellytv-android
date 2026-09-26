@@ -195,9 +195,9 @@ Performance rules (the reason a DOM app is quick on a TV):
   Jellyfin Live TV item through PlaybackInfo when a TV cannot decode the source (e.g. 1080p60 HEVC on an old set).
   Verified in Chromium: playlist requests, playback, score bug, CH+/CH- switching.
 - **Live overlays** (`pages/player/LivePage.tsx`, `liveOverlays.tsx`; tvweb-sports), as on the Android TV live player
-  (TallyPlaybackPage.kt): the **score bug** (always up on a live game with scores shown, controls up or not, drawn
-  above the bars, hidden only under the box score; until tvweb-gaps it faded 8 s after a change or a key as the
-  Android TV code still does; its digits roll), **UP** = the box score (line score, situation, last
+  (TallyPlaybackPage.kt): the **score bug** (back on open, on every score/period/situation change, while the
+  switcher is up and for 8 s after a key, then it fades; hidden under the box score; drawn above the bars, as Android
+  draws it over its controls; its digits roll), **UP** = the box score (line score, situation, last
   play; closes on the next key or after 12 s), **DOWN** = the "also on now" switcher (other live games on channels
   in board order, or the looping channels when none is live; OK switches in place, HOLD opens the game's actions),
   **event banners** for scoring plays in *other* games (the board poll's `since` events, 8 s, a lower third; never
@@ -526,8 +526,8 @@ Proposed parallel tasks after tvweb-0: `tvweb-details` (4), `tvweb-library` (3),
   board and its tabs, HOLD menus, channels, the multiview queue, settings, recordings, four-tile multiview, the live
   overlays, a team recording rule end to end, the start-over page; the 2.2 gaps (`e2e/gaps.spec.ts`): the collection
   page (rows, item menu, sort, the mixed grid), the playlist page (move down and back up, Remove from playlist, PLAY
-  from a row), Remove from continue watching, the league in Home's game header, the always-on score bug and FROM THE
-  START, the recording notice and the plugin art parameters. Live states come from the score simulator
+  from a row), Remove from continue watching, the league in Home's game header, the score bug's show/fade rule (a key, a
+  simulated score change) and FROM THE START, the recording notice and the plugin art parameters. Live states come from the score simulator
   (`tally/dev/score-sim.py`, run with `TALLY_SIM=1`; its parts are skipped without it). Screenshots in
   `test-results/shots/`.
 - **Tizen emulator**: Tizen Studio 6.1 CLI + TV Extension 10.0 in `~/tools/tizen-studio` (installed without root on
