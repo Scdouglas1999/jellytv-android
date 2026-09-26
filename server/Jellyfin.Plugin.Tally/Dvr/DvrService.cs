@@ -66,6 +66,7 @@ public sealed class DvrService : IHostedService, IDisposable
     private Task? _loop;
     private DateTimeOffset _lastRetention = DateTimeOffset.MinValue;
     private DateTimeOffset _lastItemLookup = DateTimeOffset.MinValue;
+    private volatile bool _libraryFolderRemoved;
     private bool _dirty;
 
     public DvrService(
@@ -264,8 +265,9 @@ public sealed class DvrService : IHostedService, IDisposable
             ApplyRetention();
         }
 
-        if (now - _lastItemLookup > TimeSpan.FromMinutes(5))
+        if (_libraryFolderRemoved || now - _lastItemLookup > TimeSpan.FromMinutes(5))
         {
+            _libraryFolderRemoved = false;
             _lastItemLookup = now;
             LookUpLibraryItems();
         }
@@ -1047,12 +1049,26 @@ public sealed class DvrService : IHostedService, IDisposable
         }
     }
 
-    /// <summary>Jellyfin removed an item (its library was removed, or the item deleted): a recording that was that item
-    /// is no longer in the library, so apps are not handed an item that is gone.</summary>
+    /// <summary>Jellyfin removed an item: a recording that was that item is no longer in the library, so apps are not
+    /// handed an item that is gone. A removed library (or library folder) raises this only for its own folders, not
+    /// for the items inside, so a removed folder has every recording checked against the libraries there are now.</summary>
     private void OnItemRemoved(object? sender, ItemChangeEventArgs e)
     {
         try
         {
+            if (e.Item is Folder folder)
+            {
+                // on the DVR's loop, not in Jellyfin's delete (the library is already gone from its list by now); only
+                // for a library or a folder holding a recording, and one wake for many removals (a scan removes lots)
+                if ((folder is CollectionFolder || HoldsRecording(folder.Path)) && !_libraryFolderRemoved)
+                {
+                    _libraryFolderRemoved = true;
+                    Wake();
+                }
+
+                return;
+            }
+
             var id = e.Item?.Id.ToString("N");
             if (id == null)
             {
@@ -1078,38 +1094,97 @@ public sealed class DvrService : IHostedService, IDisposable
         }
     }
 
-    /// <summary>Finished recordings without a library item look for it again (a library made or a scan run since).</summary>
-    private void LookUpLibraryItems()
+    private bool HoldsRecording(string? folder)
     {
-        List<RecordingJob> missing;
-        lock (_gate)
+        if (string.IsNullOrEmpty(folder))
         {
-            missing = _state.Jobs.Where(j => j.State == JobState.Done && j.ItemId == null && !string.IsNullOrEmpty(j.FilePath)).ToList();
+            return false;
         }
 
-        foreach (var job in missing)
+        var f = Normalize(folder);
+        lock (_gate)
         {
-            ItemIdFor(job);
+            return _state.Jobs.Any(j => j.ItemId != null && !string.IsNullOrEmpty(j.FilePath)
+                && Normalize(j.FilePath).StartsWith(f + Path.DirectorySeparatorChar, PathComparison));
         }
     }
 
-    /// <summary>The library item of a finished recording, found again if Jellyfin only picked the file up later.</summary>
-    private string? ItemIdFor(RecordingJob job)
+    /// <summary>Every finished recording's library item checked against Jellyfin's libraries as they are now: found
+    /// when a library was made or a scan run since, dropped when its library was removed.</summary>
+    private void LookUpLibraryItems()
     {
-        if (job.ItemId != null || job.State != JobState.Done || string.IsNullOrEmpty(job.FilePath))
+        List<RecordingJob> done;
+        lock (_gate)
+        {
+            done = _state.Jobs.Where(j => j.State == JobState.Done && !string.IsNullOrEmpty(j.FilePath)).ToList();
+        }
+
+        if (done.Count == 0)
+        {
+            return;
+        }
+
+        var covered = Coverage();
+        var changed = false;
+        foreach (var job in done)
+        {
+            var before = job.ItemId;
+            changed |= ItemIdFor(job, covered) != before;
+        }
+
+        if (changed)
+        {
+            Save(force: true);
+        }
+    }
+
+    /// <summary>The library item of a finished recording (see <see cref="RecordingLibrary.Reconcile"/>): found again if
+    /// Jellyfin only picked the file up later, none once no library covers the file.</summary>
+    /// <param name="job">The job.</param>
+    /// <param name="covered">Whether a library covers a path (<see cref="Coverage"/>); null: looked up now.</param>
+    private string? ItemIdFor(RecordingJob job, Func<string, bool>? covered = null)
+    {
+        if (job.State != JobState.Done || string.IsNullOrEmpty(job.FilePath))
         {
             return job.ItemId;
         }
 
-        var item = _library.FindByPath(job.FilePath, false);
-        if (item != null)
+        var file = job.FilePath;
+        var before = job.ItemId;
+        var id = RecordingLibrary.Reconcile(
+            before,
+            covered?.Invoke(file) ?? CoveringLocation(file) != null,
+            ItemExists,
+            () => _library.FindByPath(file, false)?.Id.ToString("N"));
+        if (id != before)
         {
-            var id = item.Id.ToString("N");
             Update(job, j => j.ItemId = id);
-            return id;
+            if (id == null)
+            {
+                _logger.LogInformation("JellyTV DVR: {Title}: no longer in the library (item {Item}); no library covers {File} now",
+                    job.Game.Title, before, file);
+            }
+            else
+            {
+                _logger.LogInformation("JellyTV DVR: {Title}: in the library as {Item}", job.Game.Title, id);
+            }
         }
 
-        return null;
+        return id;
+    }
+
+    private bool ItemExists(string id)
+    {
+        try
+        {
+            return Guid.TryParse(id, out var guid) && _library.GetItemById(guid) != null;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // an unreadable item is as good as gone for playing it
+            _logger.LogDebug(ex, "JellyTV DVR: looking up item {Item} failed", id);
+            return false;
+        }
     }
 
     // ------------------------------------------------------------------ retention and deleting
@@ -1266,9 +1341,10 @@ public sealed class DvrService : IHostedService, IDisposable
                 jobs = Copy(_state.Jobs);
             }
 
-            foreach (var j in jobs.Where(j => j.State == JobState.Done && j.ItemId == null))
+            var covered = new Lazy<Func<string, bool>>(Coverage);
+            foreach (var j in jobs.Where(j => j.State == JobState.Done && !string.IsNullOrEmpty(j.FilePath)))
             {
-                j.ItemId = ItemIdFor(FindJob(j.Id) ?? j);
+                j.ItemId = ItemIdFor(FindJob(j.Id) ?? j, covered.Value);
             }
 
             return jobs;
@@ -1572,13 +1648,19 @@ public sealed class DvrService : IHostedService, IDisposable
     /// <summary>"ready", "adding" or "noLibrary" for each job, reading Jellyfin's libraries once.</summary>
     public Func<RecordingJob, string> LibraryStates()
     {
-        var locations = _library.GetVirtualFolders().SelectMany(vf => vf.Locations ?? Array.Empty<string>()).Select(Normalize).ToList();
+        var covered = Coverage();
         var folder = RecordingsFolder();
-        return job =>
+        return job => RecordingLibrary.State(job.ItemId, covered(string.IsNullOrEmpty(job.FilePath) ? folder : job.FilePath));
+    }
+
+    /// <summary>Whether a library covers a path, reading Jellyfin's libraries once.</summary>
+    private Func<string, bool> Coverage()
+    {
+        var locations = _library.GetVirtualFolders().SelectMany(vf => vf.Locations ?? Array.Empty<string>()).Select(Normalize).ToList();
+        return path =>
         {
-            var p = Normalize(string.IsNullOrEmpty(job.FilePath) ? folder : job.FilePath);
-            var covered = locations.Any(l => p.Equals(l, PathComparison) || p.StartsWith(l + Path.DirectorySeparatorChar, PathComparison));
-            return RecordingLibrary.State(job.ItemId, covered);
+            var p = Normalize(path);
+            return locations.Any(l => p.Equals(l, PathComparison) || p.StartsWith(l + Path.DirectorySeparatorChar, PathComparison));
         };
     }
 

@@ -225,7 +225,8 @@ time) and follows the live ladder's continuous playlist through source switches.
   the **Sports Recordings** library itself (a Movies library with every internet metadata and image fetcher off, so
   the NFO and art stay) and logs it. It does that once: if the owner removes that library, it is not created again.
   Settings → Recordings says when no library covers the folder and offers **Create a Sports Recordings library**. A
-  library made by hand works too.
+  library made by hand works too. Recordings whose library is removed lose their library item (`noLibrary`) and get it
+  back when a library covers the folder again.
 
 Client API v1 (authenticated): `GET /JellyTV/Client/v1/recordings` (rules and jobs, and whether the caller may
 record), `POST /JellyTV/Client/v1/recordings` with `{"gameId": "…"}` or `{"teamId": "…", "league": "baseball/mlb"

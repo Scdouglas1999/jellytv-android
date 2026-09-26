@@ -14,8 +14,31 @@ public static class RecordingLibrary
     public const string Adding = "adding";
     public const string NoLibrary = "noLibrary";
 
+    /// <summary>The state apps are told. An item id only counts while a library covers the file: when the library is
+    /// removed, Jellyfin drops its items without telling anyone about each one, so a remembered id may name an item
+    /// that is gone.</summary>
     public static string State(string? itemId, bool covered)
-        => !string.IsNullOrEmpty(itemId) ? Ready : covered ? Adding : NoLibrary;
+        => !covered ? NoLibrary : !string.IsNullOrEmpty(itemId) ? Ready : Adding;
+
+    /// <summary>
+    /// The library item a finished recording has now: none while no library covers its file (a removed library
+    /// takes its items along, and Jellyfin raises no ItemRemoved for them, only for the library's own folders), the
+    /// remembered one while Jellyfin still has it, else the one Jellyfin holds for the file (a library made, or a
+    /// scan run, since).
+    /// </summary>
+    /// <param name="itemId">The item id the recording remembers.</param>
+    /// <param name="covered">Whether a library covers the recording's file right now.</param>
+    /// <param name="exists">Whether Jellyfin still has an item with that id.</param>
+    /// <param name="findByPath">The id of the item Jellyfin has for the file, if any.</param>
+    public static string? Reconcile(string? itemId, bool covered, Func<string, bool> exists, Func<string?> findByPath)
+    {
+        if (!covered)
+        {
+            return null;
+        }
+
+        return !string.IsNullOrEmpty(itemId) && exists(itemId) ? itemId : findByPath();
+    }
 
     /// <summary>
     /// Creates the recordings library by itself the first time a finished recording has none, and only then: once it
