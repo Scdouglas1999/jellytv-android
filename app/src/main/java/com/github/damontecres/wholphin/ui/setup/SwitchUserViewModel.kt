@@ -81,6 +81,13 @@ class SwitchUserViewModel
 
         fun init() {
             viewModelScope.launchDefault {
+                // TALLY: begin
+                if (io.github.scdouglas1999.tally.ui.setup.TallySetupReturn
+                        .keepSavedSession()
+                ) {
+                    return@launchDefault
+                }
+                // TALLY: end
                 serverRepository.switchServerOrUser()
             }
             quickConnectJob?.cancel()

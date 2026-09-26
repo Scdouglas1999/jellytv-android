@@ -19,7 +19,7 @@ needs a real TV marked as such.
 | Jellyfin | **@jellyfin/sdk 1.0** (MPL-2.0) over axios | Official, typed, Jellyfin 10.10 to 12 |
 | Playback | `PlayerEngine` interface, three engines: **AVPlay** (Tizen), **webOS <video>**, **HTML5 + hls.js** (browsers) | Each platform's native pipeline where it has one |
 | Design | Tally tokens on a **1920x1080 canvas**, IBM Plex from the app's `res/font`, focus = the amber frame | Same look as the Android app, measured against its screenshots |
-| Tests | Vitest (logic), Playwright in Chromium 1920x1080 against the dev server (flows), Tizen emulator (AVPlay, shell) | Logic and flows run anywhere; platform parts need the emulator or a TV |
+| Tests | Vitest (logic), Playwright in Chromium 1920x1080 against the dev server (flows, also with webOS forced), Tizen emulator (AVPlay, shell) | Logic and flows run anywhere; platform parts need the emulator or a TV |
 
 ## 2. Delivery: installed shell + server-served bundle
 
@@ -138,19 +138,19 @@ Performance rules (the reason a DOM app is quick on a TV):
 
 ## 6. Playback
 
-`src/player/`: `engine.ts` (interface), `avplayEngine.ts`, `html5Engine.ts` (also the webOS engine),
-`createEngine.ts`, `deviceProfile.ts`, `playback.ts` (PlaybackInfo, stream URL, reporting), `qualityLadder.ts`,
-`subtitles.ts`.
+`src/player/`: `engine.ts` (interface), `avplayEngine.ts`, `webosEngine.ts`, `html5Engine.ts` (browsers and
+multiview tiles), `createEngine.ts`, `deviceProfile.ts`, `playback.ts` (PlaybackInfo, stream URL, reporting),
+`qualityLadder.ts`, `subtitles.ts`.
 
 | | Tizen: AVPlay | webOS: <video> | Browser: <video> + hls.js |
 |---|---|---|---|
 | Surface | hardware plane under the page (`<object type="application/avplayer">`, page transparent) | element in the page | element in the page |
 | HLS | native | native | hls.js (loaded only here), native where the browser has it |
-| Files played directly | MP4, MKV, TS/M2TS, MOV, AVI, WebM, MPEG, FLV, ASF/WMV | MP4, MKV, TS, MOV, AVI, WebM, MPEG | MP4, WebM (MKV is converted) |
-| Video | H.264, HEVC (Main/Main10), VP9, MPEG-2/4, VC-1; AV1 where probed | H.264, HEVC, VP9, MPEG-2/4; AV1 where probed | what `MediaSource.isTypeSupported` says |
-| Audio | AAC, MP3, AC-3, E-AC-3, FLAC, Opus, Vorbis, PCM; DTS only if probed | same list | AAC, MP3, Opus, FLAC, Vorbis (+AC-3 where probed) |
-| Server conversion | HLS TS, HEVC or H.264 + AAC/AC-3/E-AC-3, 6 channels | same | HLS TS, H.264 + AAC, 2 channels |
-| State | **verified on the Tizen 10 emulator** (tvweb-tizen: films direct and converted, tracks, rungs, live, start over; real 2020-2022 firmware not yet) | stub (the HTML5 engine named `webos`) | **verified** in Chromium |
+| Files played directly | MP4, MKV, TS/M2TS, MOV, AVI, WebM, MPEG, FLV, ASF/WMV | per container, LG's tables (below): MP4/MOV, MKV, TS, AVI, MPEG-PS | MP4, WebM (MKV is converted) |
+| Video | H.264, HEVC (Main/Main10), VP9, MPEG-2/4, VC-1; AV1 where probed | H.264, HEVC, MPEG-2/4, VP8; VP9 and AV1 on UHD sets | what `MediaSource.isTypeSupported` says |
+| Audio | AAC, MP3, AC-3, E-AC-3, FLAC, Opus, Vorbis, PCM; DTS only if probed | AAC, MP3, AC-3, E-AC-3, MP2, PCM, FLAC (2 ch); Opus from webOS 24; DTS only on 23+ and only if probed | AAC, MP3, Opus, FLAC, Vorbis (+AC-3 where probed) |
+| Server conversion | HLS TS, HEVC or H.264 + AAC/AC-3/E-AC-3, 6 channels | same (never fMP4) | HLS TS, H.264 + AAC, 2 channels |
+| State | **verified on the Tizen 10 emulator** (tvweb-tizen: films direct and converted, tracks, rungs, live, start over; real 2020-2022 firmware not yet) | **verified in Chromium with webOS forced** (tvweb-webos: a film direct from its MKV, audio switched in place, release on hide, screensaver requests); **on LG's webOS 5 emulator** (QEMU): a film direct from its MKV, `audioTracks` switched in place, release on hide and reopen at the place; HLS (live, converted) not there: the emulator plays no MPEG-TS or HLS at all (section 12) | **verified** in Chromium |
 
 - **Device profiles** (`deviceProfile.ts`): tables for what each native pipeline plays from files (web engines
   under-report: `canPlayType` knows nothing of MKV or AC-3 in AVPlay), merged with probes; conservative for 2020 sets.
@@ -160,15 +160,48 @@ Performance rules (the reason a DOM app is quick on a TV):
   E-AC-3 5.1, FLAC and Opus all play; **AV1 is refused** (prepareAsync InvalidAccessError) although the web engine's
   MSE says yes, so on Tizen AV1 is left to the server whatever the probe says; DTS plays without sound (the probe says
   no, so it is converted). The emulator decodes in software: real sets decide 4K/HDR, the tables stay as they are.
-  DTS: Samsung dropped it 2018-2022, LG 2020-2021, so only when probed. UHD panels (`productinfo.
-  isUdPanelSupported`) allow 3840x2160 and HDR10/HLG. Anything not listed is converted by the server, never refused.
-  Exact per-model tables are refined on real TVs.
+  DTS: Samsung dropped it 2018-2022, LG 2020-2022 (and again in 2025), so only when probed. UHD panels
+  (`productinfo.isUdPanelSupported`; on LG the TV's configs) allow 3840x2160 and HDR10/HLG. Anything not listed is
+  converted by the server, never refused. Exact per-model tables are refined on real TVs.
+- **webOS device profile per generation** (`webosDirect`, `webosCapabilities` in deviceProfile.ts; tvweb-webos,
+  September 25, 2026). The version comes from `webOSSystem.deviceInfo.sdkVersion` (the TV counts 7 for webOS 22:
+  + 15 from 7 on) or else the web engine (Chromium 68 = webOS 5, 79 = 6, 87 = 22, 94 = 23, 108 = 24, 120 = 25,
+  132 = 26); not `platformVersion`, which is the firmware's number (the 6.0 simulator says "02.00.94", LG's webOS 5
+  emulator "02.00.30" with no sdkVersion in deviceInfo: there the web engine, Chrome 68, gives 5); UHD, HDR10 and Dolby Vision from `com.webos.service.config/getConfigs`
+  (`tv.hw.panelResolution` UD/8K, `tv.model.supportHDR`, `tv.config.supportDolbyHDRContents`, as webOSTV.js 1.2.11
+  reads them), else `com.webos.service.tv.systemproperty/getSystemInfo` UHD.
+
+  | | webOS 5 (2020) | 6 (2021) | 22 | 23 | 24 | 25 |
+  |---|---|---|---|---|---|---|
+  | MP4/M4V/MOV | H.264, HEVC, MPEG-4, AV1 (UHD) + AAC, MP3, AC-3, E-AC-3 | same | same | + DTS if probed | + DTS if probed | + DTS if probed |
+  | MKV | H.264, HEVC, MPEG-2, MPEG-4, VP8, VP9 + AV1 (UHD) + AAC, MP3, AC-3, E-AC-3, MP2, PCM, FLAC ≤ 2 ch | same | same | + DTS if probed | + Opus, DTS if probed | + Opus, DTS if probed |
+  | TS/M2TS | H.264, HEVC, MPEG-2 + AAC, MP3, AC-3, E-AC-3, MP2, PCM | same | same | + DTS if probed | + DTS if probed | + DTS if probed |
+  | AVI / MPEG-PS | H.264, MPEG-4 + MP3, AC-3, MP2, PCM / MPEG-1, MPEG-2 + MP2, MP3 | same | same | same | same | same |
+  | WebM | only where the engine says it plays VP9 (LG does not list it) | same | same | same | same | same |
+  | Converted | VC-1/WMV, TrueHD, DTS, Vorbis in video, H.264 High 10, everything else | same | same | TrueHD, DTS where not probed | same | same |
+  | Levels | H.264 5.1 / HEVC 5.1 on UHD sets, 4.2 / 4.1 on Full HD sets | same | same | same | same | same |
+  | HDR | HDR10/HDR10+/HLG and Dolby Vision base layers where the TV reports HDR (UHD otherwise); Dolby Vision itself where it reports it, in MP4/TS | same | same | same | same | + MKV |
+  | Server conversion | HLS in MPEG-TS, HEVC or H.264 + AAC/AC-3/E-AC-3, 6 ch (never fMP4) | same | same | same (native HLS downmixes to stereo on 23/24: LG's bug) | same | same |
+
+  Sources: LG's AV format pages per version (webostv.developer.lge.com/develop/specifications/video-audio-50, -60,
+  -220, -230, -240, -250: codecs per container, VP9/AV1 in the Ultra HD rows only, Opus in MKV from 24, DTS "on
+  specific models" from 23); LG's streaming page (…/specifications/streaming-protocol-drm: HLS v7, "Playback speed
+  other than 1.0: Not supported", so speed is offered for files only); LG's web engine page
+  (…/specifications/web-api-and-web-engine); jellyfin-web `src/scripts/browserDeviceProfile.js` and `browser.js`
+  (GPL-2.0, read at 6d2b5922: no DTS on webOS 5-22, FLAC ≤ 2 channels, H.264 level 5.1, AV1 from webOS 5, TS with
+  HEVC, Dolby Vision containers mp4/ts and mkv from 25, the DV fallback range types); reviews for DTS by model year
+  (HDTVTest and FlatpanelsHD, March 2025: absent 2020-2022, back 2023-2024, gone 2025); LG forum t/23069 (native HLS
+  stereo downmix on 23/24, fixed in webOS 25 firmware). A newer webOS installed on an older set keeps the older
+  set's hardware (LG updates 2022+ sets to webOS 25): the DTS and panel rules therefore ask the TV, not the version.
+  WebM, TrueHD and HDR appear on none of LG's format pages; those rows are jellyfin-web's or conservative.
 - **Subtitles**: text subtitles (SRT, ASS/SSA, embedded or external) are requested as WebVTT
   (`/Videos/{id}/{source}/Subtitles/{index}/0/Stream.vtt`) and **drawn by the app** (`SubtitleLayer`): the same
   look on every engine, and AVPlay has no `<track>`. Picture subtitles (PGS, DVD, DVB) are **burned in** by the
   server (the menu marks them). Verified: Spanish external and English embedded tracks on the dev films.
 - **Audio tracks**: a choice restarts the stream at the current position with `AudioStreamIndex` (works on every
-  engine; the server remuxes or converts), except on a **direct-played file on AVPlay**, which plays the file's first
+  engine; the server remuxes or converts), except on a **direct-played file on webOS**, where `video.audioTracks`
+  switches in place (and on webOS 5 a file plays no sound until a track is enabled: LG FAQ
+  audio-my-content-not-playing-sound-webos-tv-50, so the first is switched on), and on a **direct-played file on AVPlay**, which plays the file's first
   audio track whatever PlaybackInfo said (measured: Spanish chosen, English heard, the session said DirectPlay): there
   the engine picks the track itself (`nativeAudioFor` maps the stream to AVPlay's track by order, `setSelectTrack`),
   at start (Jellyfin's default or remembered language) and in place when the viewer switches (no restart). Jellyfin 10.10 ignores `AudioStreamIndex`
@@ -194,6 +227,15 @@ Performance rules (the reason a DOM app is quick on a TV):
   playing if the viewer was playing (paused stays paused; live goes back to the edge). Fallback (not built): the channel's
   Jellyfin Live TV item through PlaybackInfo when a TV cannot decode the source (e.g. 1080p60 HEVC on an old set).
   Verified in Chromium: playlist requests, playback, score bug, CH+/CH- switching.
+- **webOS engine rules** (`webosEngine.ts`, tvweb-webos): a `<video>` on LG's media pipeline, native HLS (never
+  hls.js on a TV: jellyfin-web's htmlMediaHelper does the same, "the native players on these devices support seeking
+  live streams"), `preload="auto"`; `load()` resolves on the metadata, so the tracks are known before the audio
+  choice is applied; a live stream that fails is opened again (5 tries, 4 s apart), a live picture that has not
+  moved for 30 s while it should play is opened again at the edge, `online` reopens a failed stream; a hidden app
+  releases the decoder (src removed) and a shown one opens the stream again at its place (paused stays paused, live
+  goes to the edge), as the AVPlay engine does; seeks stay 3 s off the end of a file; speed only for files (LG's HLS
+  plays at 1.0). A desktop browser forced to webOS (the end-to-end tests) has no native HLS: there the engine loads
+  hls.js, a TV never does.
 - **Live overlays** (`pages/player/LivePage.tsx`, `liveOverlays.tsx`; tvweb-sports), as on the Android TV live player
   (TallyPlaybackPage.kt): the **score bug** (back on open, on every score/period/situation change, while the
   switcher is up and for 8 s after a key, then it fades; hidden under the box score; drawn above the bars, as Android
@@ -231,12 +273,27 @@ Performance rules (the reason a DOM app is quick on a TV):
   - Documented for real sets: Samsung's AVPlay guide says AVPlayStore runs **two players at once** and its
     `IN_APP_MULTIVIEW` property exists from Tizen 7.0; Samsung's own Multi View (a TV feature, not for apps) shows two
     videos on 2021+ Q60A and up, four on Q800A/Q900A. No per-model list exists for apps.
+  - LG webOS: **one**, on every generation. LG's FAQ (webostv.developer.lge.com/faq/can-i-use-two-video-tags-at-
+    the-same-time): "Simultaneous use of two <video> tags, or <video> and <audio> tags is not officially supported on
+    webOS TV ... only one media content ... can be played at a time"; LG staff repeat it 2023-2026 (forum t/2947,
+    t/10522, t/22722, t/28170), and developers report the first video going black or paused when a second plays.
+    So webOS never tries two: one tile plays (the focused, audio one) and the others show live cards, the picture
+    moving with focus (`multiviewDecoders('webos')` = 1; verified in Chromium with webOS forced: one `<video>` in the
+    page at any time).
   - So `multiviewDecoders()` gives Samsung 2021+ sets (Tizen 6.0+) **two** tiles, others one, and a set that cannot
     (a tile that never moves, or a decode error, while two play) drops to one and remembers it for its model
     (`tally.multiview.decoders.<model>`): once per TV, about 20 s of stalled tiles, then one tile plays and the others
     show live cards, as before. Verified: the emulator falls back and then plays one tile, following focus. Whether
     2021+ sets play two `<video>` at once is for a real set to show; an AVPlayStore tile engine (the video plane
     placed with setDisplayRect) is the next step if they do not.
+- **Screensaver / lifecycle on webOS**: LG shows no screensaver while a video plays full screen (developer guide
+  "screensaver"), but multiview tiles, a paused picture and overlays are not that, and webOS 6+ has no setting. While
+  a player is open the app registers with `luna://com.webos.service.tvpower/power/registerScreenSaverRequest`
+  (subscribed) and answers each request (state "Active") with `responseScreenSaverRequest` `ack: false`; outside
+  players `ack: true` (undocumented by LG: mariotaku, webosbrew/apps-repo#60; Kodi's OSScreenSaverWebOS.cpp and
+  Moonfin do the same). Luna calls go through `PalmServiceBridge` directly (`platform/webos.ts`, as webOSTV.js
+  1.2.11 and Enact's LS2Request do; LG's library is not loaded). `webOSRelaunch` (launching Tally while it runs)
+  brings it forward with `webOSSystem.activate()` (in the shell, so it works before the bundle loads).
 - **Screensaver / lifecycle**: Tizen `appcommon.setScreenSaver(OFF)` while a player is open; a hidden app closes
   AVPlay and reopens the stream on return (above). Verified on the emulator: Home during a film, then Tally again
   from the Apps list (`was_execute`: "resumed", the same page) plays on from where it was. A server that does not
@@ -284,13 +341,39 @@ Performance rules (the reason a DOM app is quick on a TV):
   key's key-up, or while it is still down, as a repeat (held seeks accelerate, HOLD OK does not fire twice). Order: a text field being
   edited, then `useKeyHandler` handlers newest first (dialogs, players, a page's own BACK), then arrows/OK to the
   focus system and BACK to the router.
+- **webOS keys** (LG's Magic Remote guide, webostv.developer.lge.com/develop/guides/magic-remote): arrows 37-40, OK
+  13, BACK 461 (appinfo.json `disableBackHistoryAPI`), colors 403-406, PLAY 415, PAUSE 19, STOP 413, REWIND 412,
+  FAST FORWARD 417 (the conventional remote; the Magic Remote has none of the media keys), CH+/CH- 33/34 (Enact
+  Sandstone's keymap; LG's table says channel keys are not for apps, so they may not arrive on every set), numbers
+  48-57, INFO 457 (not in LG's docs; kept, harmless). Escape and Backspace are not BACK on webOS.
+- **Magic Remote pointer** (`platform/pointer.ts`, webOS only): LG's guideline and RemoteControl sample: the remote
+  is either in pointer mode or in 5-way mode, and apps must support both. Moving the pointer onto something
+  focusable focuses it (the amber frame follows the pointer; `focus.tsx` maps each registered element to its focus
+  key, groups excluded, so hovering a row's gap does not jump); the frame stays where it is when the pointer leaves.
+  A click is OK on what is under the pointer, delivered as the remote's OK key (so dialogs, players and HOLD see the
+  same thing); an OK key within 400 ms before the click is the same press (some sets send both) and the click is
+  dropped. Focus scrolls rows and pages as on Android TV, which can move the item just focused away from under the
+  pointer: a click where it was when it was focused still means it. The wheel steps focus one row up or down per
+  notch (at most every 180 ms). `cursorStateChange` (`detail.visibility`) and arrow keys set `html.pointer-mode`.
+  Verified in Chromium with webOS forced (hover, click, the double press, wheel, cursor events) and on LG's webOS 5
+  emulator with its own pointer (VNC's absolute pointer is the Magic Remote there): `cursorStateChange` from webOS,
+  hover focus, the wheel stepping rows, a click opening a card and the player's buttons (the emulator sends the
+  click alone, no key 13). Found there and fixed: the player's controls hid under a pointer about to click them,
+  and a click on the picture did nothing (moving or clicking the pointer is activity now, `usePointerActivity`:
+  the controls come up and stay up); a click on something not yet focused sent OK before Norigin had moved the
+  focus (its `setFocus` lands a microtask later), so a click on AUDIO under controls that had just come up paused
+  the film (OK goes once the focus is there, `setFocusThen`). On a TV: not yet.
 - **BACK**: dialog/overlay → page → previous page → on Home the drawer opens → BACK in the open drawer leaves the app
-  (Tizen `application.exit()`, webOS `window.close()`). Samsung's guideline (BACK at the top level exits) is met.
+  (Tizen `application.exit()`; webOS `webOSSystem.platformBack()`, which on webOS 6+ asks "exit?" and on webOS 5
+  goes Home, as LG's back-button guide describes; `window.close()` only where it is missing). Samsung's guideline
+  (BACK at the top level exits) is met; LG's QA checklist asks for Home on BACK at the entry page on webOS 23-25,
+  which platformBack gives.
 - **Text fields** do not take DOM focus while the D-pad passes (the TV keyboard would pop up): OK starts editing,
   OK/Done submits, UP/DOWN leave, BACK stops editing. Tizen IME Done/Cancel (65376/65385) handled in the shell.
-- **Lifecycle**: `visibilitychange` (both platforms): AVPlay suspend/restore; the board poll stops with its screens.
-  webOS relaunch (`webOSRelaunch`) and Tizen deep links: later (Play-on-TV arrives through Jellyfin's websocket
-  instead, see parity).
+- **Lifecycle**: `visibilitychange` (both platforms): AVPlay and the webOS engine release the decoder and reopen;
+  the board poll stops with its screens. webOS relaunch (`webOSRelaunch`): the shell calls
+  `webOSSystem.activate()`. Tizen deep links: later (Play-on-TV arrives through Jellyfin's websocket instead, see
+  parity).
 - **HOLD OK** (the Android TV long press: a game's actions, a channel into multiview, a card's item menu on Home and
   in the libraries; `pages/sports/useOkHold.ts`):
   on screens that have holds, OK is delivered on key-up; held for 500 ms it is a hold. The remote's auto-repeat while
@@ -480,27 +563,76 @@ Proposed parallel tasks after tvweb-0: `tvweb-details` (4), `tvweb-library` (3),
     app (a warning if not). It is stamped into `config.js` of the package made on the user's PC; the program and the
     release contain no server address.
   - Every run writes `Tally-Samsung-Installer.log` in the temp folder.
-- **LG (not built)**: the same program would need, for webOS 5+: the LG **Developer Mode** app state (Dev Mode Status
-  on, **Key Server** on); fetching the TV's SSH private key from its key server (`http://<tv>:9991/webos_rsa`) and
-  decrypting it with the **passphrase** the Developer Mode app shows (typed by the person); an SSH/SFTP client
-  (port 9922, user `prisoner`; e.g. SSH.NET, MIT) to copy the `.ipk` to `/media/developer/temp` and run
-  `luna-send -n 1 luna://com.webos.appInstallService/dev/install '{"id":…,"ipkUrl":…,"subscribe":true}'` and
-  `luna://com.webos.applicationManager/launch`, which is what `ares-install`/`ares-launch` do; building the `.ipk`
-  itself (an `ar` archive of `debian-binary`, `control.tar.gz`, `data.tar.gz`, as `ares-package` writes; no
-  signing); and the 50-hour Developer Mode session, which community tools extend by calling LG's
-  `ResetDevModeSession` with the token stored on the TV. Not cheap (SSH, key handling, the session timer), so it is
-  left for the LG task.
+- **LG**: *Tally for LG*, built from the same source tree (below).
 - **Store**: Samsung Seller Office distribution is possible later; its review of an app that loads its code from a
   server is an open question (Samsung's hosted-app rules allow external scripts with registration).
 
 ### LG (webOS)
-- **Package**: `scripts/package-webos.sh [--server URL]` → `dist/io.github.scdouglas1999.tally_<ver>_all.ipk`
-  (≈70 KB) with `ares-package` (`@webos-tools/cli` 3.2.6 in `~/tools/webos-cli`). `appinfo.json`: id
-  `io.github.scdouglas1999.tally`, `disableBackHistoryAPI: true` (BACK arrives as key 461), resolution 1920x1080,
-  icons 80/130 px.
-- **Install**: the LG **Developer Mode** app (LG account, from the LG Content Store) on the TV → Dev Mode Status On,
-  Key Server On; `ares-setup-device` with the TV's IP and passphrase, `ares-install`, `ares-launch`. The Dev Mode
-  session **expires after 50 hours** unless extended in the app (community tools extend it automatically).
+- **Package**: an `.ipk` of the shell (`shell/` + `shell/webos/appinfo.json`: id `io.github.scdouglas1999.tally`,
+  `disableBackHistoryAPI: true` (BACK arrives as key 461), resolution 1920x1080, icons 80/130 px, `bgColor`, no
+  webOSTV.js). `scripts/package-webos.sh [--server URL]` makes one with LG's `ares-package` (`@webos-tools/cli`
+  3.2.6 in `~/tools/webos-cli`, development only); Tally for LG writes its own (below).
+- **Developer Mode** (the person does this on the TV once): a free LG developer account; LG's **Developer Mode** app
+  from the LG Content Store; sign in; Dev Mode Status on (the TV restarts); Key Server on. The app shows the TV's IP,
+  a 6-character passphrase and the session's time left.
+- **The session**: apps installed this way stay while Developer Mode's session lasts; when it runs out LG turns
+  Developer Mode off at the next restart and removes them, and an expired session cannot be extended (LG,
+  develop/getting-started/developer-mode-app). The app's EXTEND button resets it. Community tools do the same from
+  outside with the TV's session token, `/var/luna/preferences/devmode_enabled` (letters and digits), readable as the
+  `prisoner` user: `GET https://developer.lge.com/secure/ResetDevModeSession.dev?sessionToken=<token>` →
+  `{"result":"success","errorCode":"200","errorMsg":"GNL"}`, and `CheckDevModeSession.dev` for the time left
+  (`errorMsg` "H:MM:SS"); failure `{"result":"fail","errorCode":"ERR_005","errorMsg":"Check user session"}` (webosbrew
+  dev-manager-desktop `src-tauri/src/plugins/devmode.rs` and `renew-script.sh.ts`, webosbrew dev-utils
+  `scripts/devmode-reset.sh`, gabe565/webos-dev-mode's client and fixtures). Older Developer Mode apps gave 50 hours,
+  current ones show up to 1000; Tally renews daily either way. **Tally keeps it on**: Tally for LG reads the token
+  and stamps it into the shell's `config.js` (`devModeToken`, exposed as `TallyShell.devModeToken`); once someone is
+  signed in, the app sends it to the plugin (`POST /JellyTV/Client/v1/lg/devmode`, `platform/lgDevMode.ts`, on every
+  start with a session), and the plugin's `LgDevModeService` resets the session every day, logs the result, shows
+  "LG Developer Mode kept on for 1 TV · renewed <time>" on its settings page, retries a failure after an hour and
+  forgets a TV failing for 14 days (server/README.md).
+- **Tally for LG** (`installer/lg/`, for everyone; the steps for people are in [INSTALL-LG.md](INSTALL-LG.md)): one
+  self-contained program per desktop OS, `Tally-LG-Installer-windows.exe`, `-linux`, `-macos-arm64`, `-macos-x64`
+  (`installer/build.sh lg`, released next to the Samsung ones). It shares `installer/common/` with Tally for Samsung:
+  the console (`Ui`), the Jellyfin server step (`ServerStep`, `JellyfinServer`), the home-network scan
+  (`NetworkScan`), `config.js` (`ShellConfig`), the sign-in hand-off text (`Handoff`) and the program frame
+  (`ConsoleHost`: log file, Ctrl+C, "Press Enter to close"); the Samsung program's behavior and its 82 tests are
+  unchanged. No LG tools, Node.js or Java.
+  - **Find the TV**: every address of this PC's /24 is asked whether Developer Mode's SSH (9922), Key Server (9991)
+    and webOS's second-screen port (3000) take a connection; names from SSDP
+    (`urn:lge-com:service:webos-second-screen:1`) where the TV answers. Statuses: ready / Key Server off / Developer
+    Mode off; or the IP is typed (the Developer Mode app shows it).
+  - **Key**: `GET http://<tv>:9991/webos_rsa` (as LG's CLI `lib/base/novacom.js`), an OpenSSL traditional encrypted
+    PEM (`Proc-Type: 4,ENCRYPTED`, `DEK-Info: AES-128-CBC`; the TV makes it with `ssh-keygen -t rsa -N <passphrase>`),
+    unlocked with the passphrase the person types (6 characters, upper-cased as the app shows them): EVP_BytesToKey
+    (MD5) + AES/3DES-CBC, checked by parsing the PKCS#1 key, so a wrong passphrase is said as such before any SSH
+    (`Webos/DevModeKey.cs`). An OpenSSH-format key is handed to SSH.NET with the passphrase. The key and passphrase
+    are kept per TV in `%APPDATA%\Tally\LG` / `~/.config/Tally/LG` (user-only), so an update needs neither the Key
+    Server nor the passphrase; a refused kept key (Developer Mode set up anew) fetches the new one.
+  - **SSH/SFTP**: SSH.NET 2026.0.0 (MIT, pinned), port 9922, user `prisoner`; the TV's host key is legacy `ssh-rsa`
+    (SHA-1) and changes with every Developer Mode setup, so it is accepted and logged as LG's CLI does.
+  - **Install**, as ares-install does it (lib/install.js, files/conf/command-service.json): `test -d
+    /media/developer/temp || mkdir -p`, SFTP the ipk there (a shell `cat >` when SFTP is missing, as novacom.js
+    falls back), compare the MD5 of its last 200 bytes on both sides, `/usr/bin/luna-send-pub -i
+    luna://com.webos.appInstallService/dev/install '{"id":…,"ipkUrl":…,"subscribe":true}'` followed until
+    `details.state` is "installed" or "…failed" (reason shown in plain words: space, busy, package), `rm -f` the
+    ipk; `luna://com.webos.applicationManager/dev/closeByAppId` first (an update under a running app) and
+    `…/launch` after. TV information: `luna://com.webos.service.tv.systemproperty/getSystemInfo` (model, SDK version:
+    5.x, 6.x, then 7.x = webOS 22 …); webOS below 5 is refused. The session token is read over SFTP
+    (`cat` fallback) and stamped into the package.
+  - **The ipk** (`Ipk/IpkWriter.cs`), as ares-package 3.2.6 writes it (lib/package.js): an `ar` archive
+    (`!<arch>`, `debian-binary` "2.0\n", `control.tar.gz`, `data.tar.gz`; 60-byte headers with uid/gid 0, mode 100644,
+    odd members padded), `control` with ares's fields (Installed-Size in bytes), `data.tar.gz` with
+    `usr/palm/applications/<id>/…` and `usr/palm/packages/<id>/packageinfo.json`, ustar headers as node-tar writes
+    them (octal fields "000644 \0", directories 0777 before their files, atime/ctime in the prefix area), gzip with
+    node's header (mtime 0, OS 3). Compared with a package ares-package made of the same shell
+    (`installer/lg/tests/fixtures/golden/`): identical members, header layouts, entry names, types, modes, sizes and
+    bytes; only times, the packer's user name and the deflate stream differ. No signing (Developer Mode installs
+    unsigned packages).
+  - Every run writes `Tally-LG-Installer.log` in the temp folder; `--package` writes only the ipk; for LG's
+    emulator: `--tv 127.0.0.1 --ssh-port 6622 --user developer --key <webos_emul>`. Run that way against LG's webOS
+    5 emulator (section 12): the TV information (webOS 5, WEBOS5.0), no session token (said so), the server check,
+    the copy, LG's own `appInstallService` installing the ipk this program wrote, `launch`; a second run (the
+    update) closed the running Tally, installed over it and launched it again, still signed in.
 - **Store**: LG Seller Lounge / Content Store review; same open question about server-loaded code.
 
 ## 12. Testing
@@ -513,7 +645,11 @@ Proposed parallel tasks after tvweb-0: `tvweb-details` (4), `tvweb-library` (3),
   Android DvrModelsTest payload), multiview slots, D-pad map and decoder allotment; the player's formats, the Home
   header's meta line; the collection and playlist pages' meta lines and Jellyfin 10.10's playlist move (every
   from/to pair measured on the dev server, and the plan that corrects it), the item menu's Remove from continue
-  watching, the plugin art parameters and the recordings' library state. 153 tests.
+  watching, the plugin art parameters and the recordings' library state; webOS: the version from deviceInfo and the
+  web engine, Luna calls through a fake PalmServiceBridge, the panel configs, the screensaver requests, the
+  Developer Mode hand-off, the per-generation device profiles, and the webOS engine against a fake `<video>`
+  (native HLS, resume point, audio tracks and webOS 5's first track, release on hide, live retries, speed for files
+  only). 177 tests.
 - **Lint** (`npm run lint`): ESLint (typescript-eslint + compat for Chromium 68), `tsc --noEmit` strict, CSS legacy
   check. **Build** adds the ES2019 parse of the bundle.
 - **End-to-end** (`npm run e2e`, Playwright 1.63, Chromium at 1920x1080, the production bundle through
@@ -586,9 +722,73 @@ Proposed parallel tasks after tvweb-0: `tvweb-details` (4), `tvweb-library` (3),
   requests (field names, CSR subjectAltName, error answers, CA matching) against a fake service, and the whole flow
   (a 2021 TV, the update path with the same author, replacing a Tally from another computer, a TV that refuses this
   PC, a 2024 TV with a file for another TV, a file for this TV, no TV app on the server).
-- **webOS**: the webOS TV emulator is a VirtualBox image (needs VirtualBox, i.e. root on this host). The webOS TV
-  Simulator (a Chromium shell, not LG's media pipeline) is offered for webOS 6.0 and 22-26 on LG's developer site
-  behind a license dialog (no webOS 5 build); neither is installed yet: webOS follows Samsung.
+- **webOS in Chromium** (`e2e/webos.spec.ts`, tvweb-webos): the production bundle with the webOS platform forced
+  before any script runs: `webOSSystem` (deviceInfo of a 2020 OLED, `activate`, `platformBack`) and a
+  `PalmServiceBridge` that answers the panel configs and the screensaver requests and records every Luna call; LG's
+  key codes dispatched as the TV sends them; the mouse as the Magic Remote; `--enable-blink-features=
+  AudioVideoTracks` for LG's `audioTracks`. Five flows: the platform, BACK 461 (and Escape not being BACK), the
+  drawer and platformBack, the device profile sent to the server (UHD webOS 5: AV1 in MKV, no DTS) and the
+  Developer Mode hand-off (token, model, the session's authorization); a film played straight from its MKV on the
+  webOS engine, Spanish audio switched in the element (no new PlaybackInfo, the same file), hide/show releasing and
+  reopening at the position with the track kept, PAUSE/PLAY keys, the screensaver requests answered ack false then
+  true; the pointer (hover focus, `cursorStateChange`, arrows ending pointer mode, the wheel stepping rows, a click
+  opening a card, OK key + click counted once); multiview with one `<video>` at a time and live cards; the
+  installed shell (tv-web/shell with the config.js Tally for LG stamps) loading the bundle, `webOSRelaunch` →
+  `activate`, BACK → platformBack.
+- **Tally for LG** (`dotnet test installer/lg/tests`, xUnit, 41 tests): the ipk writer against ares-package's own
+  package of the shell (members, headers, entries, modes, bytes; valid ustar checksums; gzip header; CRC-32), key
+  unlocking (keys made as the TV makes them: `ssh-keygen -m PEM` AES-128-CBC, 3DES, OpenSSH format; wrong
+  passphrases; EVP_BytesToKey against OpenSSL's values), the key server fetch, the luna commands and replies (the
+  install subscription as a real TV sends it, failures, split lines), the install sequence (commands in order, a cut
+  copy caught by the MD5, space errors), the TV scan (loopback addresses), and the whole flow against a fake TV (a
+  2020 TV, a wrong passphrase, Key Server off, Developer Mode off, the kept key and a key that changed, webOS 4
+  refused, the emulator's key without a session token, `--package`). End to end over real SSH:
+  `installer/lg/tests/fake-webos-tv.py` (paramiko 3.x) is a TV-like endpoint: Key Server, SSH on its own port with
+  only `ssh-rsa` (as a TV), `prisoner` with the served key, SFTP into a root folder with the TV's paths, and
+  `luna-send-pub` answering as a TV, **unpacking the ipk with Python's ar/tar readers** and checking packageinfo and
+  appinfo; Tally-LG-Installer-linux installed, updated with the kept key, and launched through it (transcript in the
+  tvweb-webos report). Found this way: SSH.NET signs the user key with `ssh-rsa`, which modern servers refuse and
+  the TV requires.
+- **Plugin** (`server/Tally.Tests/LgDevModeTests.cs`): LG's answers, the daily renewal and its schedule, failures
+  retried after an hour and forgotten after 14 days, one entry per TV, tokens validated, at most 20, kept across
+  restarts, against a fake LG server.
+- **webOS runtimes**: LG's **webOS TV Emulator** exists only for webOS 1.2-6.0 ("From webOS TV 22, Emulator will not
+  be provided"), as a VirtualBox VM (a 1.3-1.5 GB zip: a monolithic sparse VMDK, Yocto qemux86, IDE, e1000, VMSVGA;
+  SSH 6622 → 22 as `developer`); this host has no VirtualBox and no root. The **webOS TV Simulator** (Electron,
+  Chromium 79 for 6.0; 22-26 builds too) runs without root. **Run in LG's webOS 6.0 Simulator 1.4.1**
+  (tvweb-webos, September 25, 2026; `scripts/webos-simulator.sh`, driven over its DevTools port): the shell as Tally
+  for LG installs it loaded the bundle from a server, Quick Connect signed in, Home drew (the simulator zooms the
+  1920x1080 page into a 1280x720 window), LG's `webOSSystem.deviceInfo` and `PalmServiceBridge` were the simulator's own, the
+  panel came from its `getConfigs` (FHD, no HDR: the Full HD profile), the arrow keys, BACK 461 (the drawer, then
+  `platformBack` bringing LG's "Do you want to exit the app?"), the Magic Remote's hover, wheel and click, and a
+  film played straight from its MKV with the app's subtitles. The screensaver service is not in the simulator
+  ("Service does not exist: com.webos.service.tvpower"; the app carries on). It found two bugs, both fixed:
+  deviceInfo's `platformVersion` is the firmware's number ("02.00.94"), so the version now comes from `sdkVersion`
+  or the web engine; a click opened a page twice (the kit's `onClick` for desktop mice acted as well as the
+  pointer's OK), so the pointer's click now stops there. It is not LG's media pipeline (Electron's own decoders) and
+  has no `audioTracks`.
+  **Run in LG's webOS TV Emulator 5.0 under QEMU** (tvweb-webos, September 26, 2026; `scripts/webos-emulator.sh`:
+  the VirtualBox VM's own disk behind a qcow2 overlay, KVM, 1 GB, VNC display, no root, boots in under a minute):
+  webOS 5.0.0 (`getSystemInfo`: WEBOS5.0, sdkVersion 5.0.0, firmware 02.00.30), the real web engine of 2020 sets,
+  **Chrome/68.0.3440.106**, so the Chromium 68 floor held on the engine itself (the Tizen emulator is Chrome 130).
+  Tally for LG installed and launched Tally (section 11); the shell loaded the bundle from a Jellyfin server, Quick
+  Connect signed in, Home, film pages and the player drew as in Chromium. deviceInfo there has no sdkVersion and
+  `platformVersion` "02.00.30", so the version came from the web engine (5); `getConfigs` says panel UD, supportHDR
+  "" (so UHD without HDR: AV1 in the profile sent to the server). LG's remote through the launcher's port (19001):
+  arrows, OK, BACK 461 (the drawer, then `platformBack`, which on webOS 5 brings LG's launcher over the app), PAUSE
+  19 / PLAY 415 / STOP 413, colors 403-406, CH+ 33 / CH- 34, numbers 48-57 (INFO sends nothing). `webOSRelaunch`
+  (launching Tally while it runs) called `activate()`. On LG's media pipeline: a film direct from its MKV
+  (`Static=true`, H.264 + 2 AAC tracks), `audioTracks` with both tracks and the Spanish one switched in place (no
+  new PlaybackInfo, same file, playing on), the end of the film reported (post-play); another app in front: the
+  page hidden, the decoder released (src removed); Tally again: reopened at its place (22.6 s), playing, Spanish
+  kept. Not verifiable there: the emulator's pipeline plays MP4 and MKV but refuses MPEG-TS files and every HLS
+  (TS or fMP4, `MEDIA_ERR_SRC_NOT_SUPPORTED`), so live channels, converted streams and quality rungs (HLS in TS
+  from the server) stay "tuning in" there; `com.webos.service.tvpower` (the screensaver) does not exist there
+  either; no Developer Mode session token (the emulator has no Developer Mode app): with a test token written into
+  the installed config.js, the app handed it to this branch's plugin once signed in ("keeping LG Developer Mode on
+  for LG webOS.TV", the settings line's 1 TV) and the plugin's renewal failed as it should in a container whose
+  developer.lge.com pointed at loopback (nothing reached LG). One `<video>` decoder is assumed, not measured there
+  (HLS tiles cannot play).
 
 ## 13. Feature parity with the Android TV app
 
@@ -628,8 +828,10 @@ how), **not possible** (and why).
 | Live player: plugin continuous playlist, score bug | done |
 | Live player: tune-in lamp | done |
 | Live player: event banners, game switcher, box score overlay | done |
-| Corner view (picture in picture) | adapted: needs a second decoder (Tizen avplaystore / webOS dual <video> where the set has it), else the live card image |
-| Multiview 4-up | done in browsers; adapted on TVs: two playing tiles on Samsung 2021+ (one where the set shows it cannot, remembered per model), one elsewhere; the other tiles show live cards (section 6) |
+| Corner view (picture in picture) | adapted: needs a second decoder (Tizen avplaystore where the set has it), else the live card image; never a second video on LG (one media element at a time) |
+| Multiview 4-up | done in browsers; adapted on TVs: two playing tiles on Samsung 2021+ (one where the set shows it cannot, remembered per model), one on LG (every generation) and elsewhere; the other tiles show live cards (section 6) |
+| Remote: D-pad, BACK, media, color, channel keys | done on Samsung (measured on the emulator) and LG (LG's key codes; in Chromium with webOS forced) |
+| LG Magic Remote pointer (hover, click, wheel) | done (webOS: pointer mode and 5-way mode, section 8) |
 | Follow teams, hide scores, "My channels only" (shared settings) | done |
 | Favorite channels | planned (the board reads them; no screen sets them on Android TV either) |
 | DVR: record a game, record every team game (keep last N), Recordings tab, watch from the start, stop/cancel/delete | done (recording itself unverified on the dev server: it keeps 10 GB free and has less) |
@@ -653,6 +855,12 @@ the TVs (the plugin already serves it to browsers the same way). Apache-2.0 is n
 keeping it separate matters; the owner may prefer to state the bundle as GPL-2.0-or-later instead (open question).
 Build/test only (not shipped): Vite, Rolldown, TypeScript, ESLint and plugins, Vitest, Playwright, acorn, the Tizen
 Studio CLI and the webOS CLI.
+
+Tally for LG (`installer/lg/`) ships the .NET runtime (MIT), the shell with its fonts (OFL), SSH.NET 2026.0.0 (MIT),
+BouncyCastle.Cryptography 2.7.0 (MIT, SSH.NET's dependency) and Microsoft.Extensions.Logging.Abstractions (MIT); no
+LG software (LG's CLI, Apache-2.0, was read as the specification; `--licenses` prints the notice). Tests only: test
+keys made on the development machine, an ares-package output of the shell, paramiko (LGPL-2.1, the fake TV's
+Python dependency, not in the repository).
 
 Tally for Samsung (`installer/`) ships the .NET runtime (MIT), the shell and Samsung's public TV developer CA
 certificates (published by Samsung under Apache-2.0). Tizen's public Developers CA certificate and key and public
@@ -679,7 +887,14 @@ with its notice) for the byte-for-byte signing tests.
 - **Stores** (Samsung Seller Office, LG Content Store): pursue, or sideload only? Both review apps that load code
   from a server.
 - **hls.js licensing** for the browser version (separate file today), or GPL-2.0-or-later for tv-web.
-- **LG**: a Developer Mode app session expires every 50 hours; acceptable for friends, or aim for the store?
+- **LG**: installs through Developer Mode, whose session the plugin now renews daily (it needs the server running and
+  someone signed in on the TV once); acceptable for friends, or aim for the LG Content Store? LG's webOS 5 emulator
+  ran Tally (Chrome 68, the install, keys, pointer, direct play, audio tracks, lifecycle; section 12); the first
+  real LG TV is the first run of: native HLS on LG's pipeline (live channels and the live edge, converted streams,
+  quality rungs: the emulator plays no HLS), 4K/HDR/Dolby Vision direct play, the Magic Remote itself (does OK send
+  key 13 as well as the click), the screensaver requests (no such service in the emulator), the Developer Mode
+  session token file and the renewal call (community-documented, not LG-documented), and Tally for LG's SSH to a
+  real TV's `prisoner` account with a Key Server key.
 - **The friend's TV** is the first real Samsung: what the emulator could not show is how many multiview tiles it
   plays (two are tried on 2021+ sets, section 6), 4K/HDR direct play, and that 2020-2022 firmware behaves as the
   Tizen 10 emulator did (AVPlay rules, keys). Its web inspector works the same way (Developer Mode, `sdb connect`).

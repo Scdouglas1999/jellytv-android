@@ -25,6 +25,16 @@ command -v systemctl >/dev/null || die "This script needs systemd to stop and st
 
 installed() { dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q 'install ok installed'; }
 
+# The system's time zone (a tz database name), which Jellyfin follows: its guide and Tally's channel cards show times
+# in it (the Tally apps ask for their own zone).
+host_zone() {
+  local z=""
+  command -v timedatectl >/dev/null && z="$(timedatectl show -p Timezone --value 2>/dev/null || true)"
+  [ -z "$z" ] && [ -f /etc/timezone ] && z="$(head -1 /etc/timezone)"
+  [ -z "$z" ] && [ -L /etc/localtime ] && z="$(readlink /etc/localtime | sed 's|.*/zoneinfo/||')"
+  printf '%s' "${z:-UTC}"
+}
+
 missing=()
 for tool in curl unzip; do command -v "$tool" >/dev/null || missing+=("$tool"); done
 if [ ${#missing[@]} -gt 0 ]; then
@@ -120,6 +130,12 @@ ip="$(ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p'
 address="http://${ip:-$(hostname -I | awk '{print $1}')}:$port"
 echo
 echo "Done. Jellyfin is running at $address"
+zone="$(host_zone)"
+case "$zone" in
+  UTC|Etc/UTC|Etc/Universal|Universal|Zulu|Etc/Zulu)
+    echo "This server's time zone is UTC, so Jellyfin's guide shows times in UTC. To change it: sudo timedatectl set-timezone <Area/City>, then sudo systemctl restart jellyfin" ;;
+  *) echo "Times in Jellyfin's guide and on Tally's channel cards follow this server's time zone ($zone)." ;;
+esac
 if printf '%s' "$info" | grep -qi '"startupwizardcompleted":false'; then
   echo "Open that address to set Jellyfin up (your user, your media folders). Tally is ready once you are signed in."
 else

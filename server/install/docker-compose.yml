@@ -55,9 +55,11 @@ services:
         condition: service_completed_successfully
     restart: unless-stopped
     environment:
-      # Your time zone (a name from the tz database). Tally's channel cards and guide show times in the server's
-      # zone, and containers run in UTC unless told otherwise. Set TZ in your shell or an .env file next to this
-      # file, or change the default here.
+      # Your time zone (a name from the tz database). Jellyfin's guide and Tally's channel cards show times in the
+      # server's zone (the Tally apps ask for their own), and containers run in UTC unless told otherwise. To use
+      # this computer's zone, run this once next to this file (Linux):
+      #   echo "TZ=$(timedatectl show -p Timezone --value 2>/dev/null || cat /etc/timezone 2>/dev/null || readlink /etc/localtime | sed 's|.*/zoneinfo/||')" >> .env
+      # or set TZ in your shell or the .env file by hand, or change the default here.
       TZ: ${TZ:-America/New_York}
     ports:
       - "8096:8096"

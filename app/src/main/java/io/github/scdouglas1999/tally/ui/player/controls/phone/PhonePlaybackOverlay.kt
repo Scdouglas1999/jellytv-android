@@ -438,7 +438,8 @@ private fun TopRow(
         }
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
+        // under the status strip: every button is a full 48dp target a tap reaches
+        modifier = modifier.fillMaxWidth().playerTopBarInset().padding(horizontal = 8.dp, vertical = 8.dp),
     ) {
         PhoneTopBarAction(
             glyph = R.string.tally_phone_fa_arrow_left,

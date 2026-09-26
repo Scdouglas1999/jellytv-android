@@ -1,3 +1,6 @@
+// Modified for Tally (https://github.com/Scdouglas1999/Tally), a fork of Wholphin
+// (https://github.com/damontecres/Wholphin), from September 2026. Changes are marked TALLY: begin/end;
+// each change and its date is in the git history. See NOTICE.md.
 package com.github.damontecres.wholphin.services
 
 import androidx.compose.runtime.mutableStateListOf
@@ -25,6 +28,10 @@ class SetupNavigationManager
          * Go to the specified [SetupDestination]
          */
         fun navigateTo(destination: SetupDestination) {
+            // TALLY: begin
+            io.github.scdouglas1999.tally.ui.setup.TallySetupReturn
+                .onNavigate(backStack.firstOrNull(), destination)
+            // TALLY: end
             backStack[0] = destination
             log()
             if (destination !is SetupDestination.AppContent) {

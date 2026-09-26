@@ -74,13 +74,14 @@ public class RecordingsController : ControllerBase
             return Unauthorized();
         }
 
+        var libraryState = _dvr.LibraryStates();
         return Ok(new
         {
             canManage,
             reason = canManage ? null : NoPermission,
             rules = _dvr.Rules.Select(RuleDto),
             jobs = _dvr.Jobs.OrderBy(j => Order(j.State)).ThenBy(j => JobState.IsFinal(j.State) ? -(j.EndedAt ?? j.CreatedAt).ToUnixTimeSeconds() : j.Game.Start.ToUnixTimeSeconds())
-                .Select(j => JobDto(j, isAdmin))
+                .Select(j => JobDto(j, isAdmin, libraryState))
         });
     }
 
@@ -119,7 +120,7 @@ public class RecordingsController : ControllerBase
             }
 
             var (rule, job, created) = _dvr.RecordGame(game, user.Value.Id, user.Value.Name);
-            return StatusCode(created ? 201 : 200, new { rule = rule == null ? null : RuleDto(rule), job = JobDto(job, false) });
+            return StatusCode(created ? 201 : 200, new { rule = rule == null ? null : RuleDto(rule), job = JobDto(job, false, _dvr.LibraryStates()) });
         }
 
         if (!string.IsNullOrWhiteSpace(request.TeamId))
@@ -309,7 +310,8 @@ public class RecordingsController : ControllerBase
             freeBytes = s.FreeBytes,
             totalBytes = s.TotalBytes,
             usedBytes = s.UsedBytes,
-            library = _dvr.CoveringLibrary()
+            library = _dvr.CoveringLibrary(),
+            libraryAutoCreatedAt = _dvr.LibraryAutoCreatedAt
         };
     }
 
@@ -413,7 +415,9 @@ public class RecordingsController : ControllerBase
         _ => 4
     };
 
-    private object JobDto(RecordingJob j, bool isAdmin) => new
+    /// <summary>A job as the apps see it. <c>libraryState</c>: "ready" (<c>itemId</c> is set), "adding" (a library covers
+    /// the file, Jellyfin has not added it yet) or "noLibrary" (no library covers the recordings folder).</summary>
+    private object JobDto(RecordingJob j, bool isAdmin, Func<RecordingJob, string> libraryState) => new
     {
         id = j.Id.ToString("N"),
         ruleId = j.RuleId.ToString("N"),
@@ -441,6 +445,7 @@ public class RecordingsController : ControllerBase
         fileBytes = j.FileBytes,
         filePath = isAdmin ? j.FilePath : null,
         itemId = j.ItemId,
+        libraryState = libraryState(j),
         startOverPath = j.State == JobState.Recording && j.Segments > 0 ? Request.PathBase.Value + DvrEnricher.StartOverPath(_signer, j.Id) : null
     };
 

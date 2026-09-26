@@ -32,9 +32,11 @@ public sealed class DvrEnricher : IBoardEnricher
             return Task.CompletedTask;
         }
 
+        // Jellyfin's libraries are read at most once per board, and only for a recording that is not a library item yet
+        var states = new System.Lazy<System.Func<RecordingJob, string>>(_dvr.LibraryStates);
         foreach (var g in context.Board.Games)
         {
-            g.Recording = _dvr.ForGame(g.Id, id => StartOverPath(_signer, id));
+            g.Recording = _dvr.ForGame(g.Id, id => StartOverPath(_signer, id), job => states.Value(job));
         }
 
         return Task.CompletedTask;

@@ -826,7 +826,7 @@ class DownloadEngine
         /** The server answers again: its user details for the app (unknown after an offline start). */
         internal suspend fun refreshUser() {
             try {
-                serverRepository.updateUserDto()
+                serverRepository.tallyCompleteOfflineSession()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

@@ -1,6 +1,10 @@
 import type { ShellPlatform, TallyShell } from '../shell-contract/shell';
 import { TIZEN_KEY_NAMES, type Key } from './keys';
 import './tizen-types';
+import { createScreenSaverGuard, readDeviceInfo, readDisplay, webosVersion, type WebosDisplay } from './webos';
+
+/** What the screen shows, for the device profile (direct play of 4K, HDR10/HLG, Dolby Vision). */
+export type Display = WebosDisplay;
 
 /**
  * What differs between Samsung, LG and a browser, behind one small interface. Screens never test the platform
@@ -20,6 +24,10 @@ export interface Platform {
   model(): string;
   /** Tizen's version as a number (6.5), 0 elsewhere. */
   tizenVersion(): number;
+  /** The TV's OS version as its maker names it: Tizen 6.5, webOS 5, 6, 22 … 25; 0 in a browser. */
+  osVersion(): number;
+  /** The panel: UHD, HDR10, Dolby Vision (Samsung: productinfo; LG: the TV's configs, read at start). */
+  display(): Display;
 }
 
 function tizenPlatform(shell: TallyShell): Platform {
@@ -69,32 +77,56 @@ function tizenPlatform(shell: TallyShell): Platform {
         return '';
       }
     },
-    tizenVersion() {
+    tizenVersion,
+    osVersion: tizenVersion,
+    display() {
+      let uhd: boolean;
       try {
-        const v = window.tizen?.systeminfo?.getCapability('http://tizen.org/feature/platform.version');
-        return typeof v === 'string' ? parseFloat(v) || 0 : 0;
+        uhd = window.webapis?.productinfo?.isUdPanelSupported?.() === true;
       } catch {
-        return 0;
+        uhd = false;
       }
+      return { uhd, hdr10: null, dolbyVision: false };
     },
   };
 }
 
+function tizenVersion(): number {
+  try {
+    const v = window.tizen?.systeminfo?.getCapability('http://tizen.org/feature/platform.version');
+    return typeof v === 'string' ? parseFloat(v) || 0 : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * LG webOS (platform/webos.ts): the model and version from webOSSystem.deviceInfo and the web engine, the panel
+ * from the TV's configs (read once at start: the answer arrives long before anything plays), the screensaver held off
+ * through the TV's power service while something plays.
+ */
 function webosPlatform(shell: TallyShell): Platform {
+  const info = readDeviceInfo();
+  const version = webosVersion(info, navigator.userAgent);
+  let display: Display = { uhd: false, hdr10: null, dolbyVision: false };
+  readDisplay((d) => (display = d));
+  const screenSaver = createScreenSaverGuard('io.github.scdouglas1999.tally');
   return {
     name: 'webos',
     runtimeKeys: {},
     deviceName() {
-      return 'LG TV';
+      return info.modelName !== '' ? 'LG ' + info.modelName : 'LG TV';
     },
-    keepAwake() {
-      // webOS keeps the screen on while a <video> plays; a Luna call is needed only for music (later)
+    keepAwake(awake) {
+      screenSaver(awake);
     },
     exit() {
       shell.exit();
     },
-    model: () => '',
+    model: () => info.modelName,
     tizenVersion: () => 0,
+    osVersion: () => version,
+    display: () => display,
   };
 }
 
@@ -117,6 +149,8 @@ function browserPlatform(shell: TallyShell): Platform {
     },
     model: () => '',
     tizenVersion: () => 0,
+    osVersion: () => 0,
+    display: () => ({ uhd: false, hdr10: null, dolbyVision: false }),
   };
 }
 

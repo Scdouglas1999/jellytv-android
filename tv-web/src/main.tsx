@@ -10,6 +10,8 @@ import { app } from './app/context';
 import { adoptShellServer, initJellyfin } from './api/jellyfin';
 import { currentFocusKey, initFocus } from './focus/focus';
 import { installKeyRouter } from './platform/keyRouter';
+import { installDevModeHandoff } from './platform/lgDevMode';
+import { installPointer } from './platform/pointer';
 import { createStage } from './platform/stage';
 import { App, rootBack } from './app/App';
 import { push, stack } from './router/router';
@@ -22,6 +24,11 @@ app.platform = platform;
 initJellyfin(platform.deviceName());
 initFocus();
 installKeyRouter(platform, () => rootBack(() => platform.exit()));
+if (platform.name === 'webos') {
+  // the Magic Remote's pointer, and LG's Developer Mode kept on through the Tally plugin
+  installPointer();
+  installDevModeHandoff(shell.devModeToken, platform.model());
+}
 const stage = createStage();
 // a session saved for another address of the shell's server follows the shell (the server moved, or the TV was
 // reinstalled for another server) before the first screen asks it for anything

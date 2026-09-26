@@ -52,6 +52,7 @@ import io.github.scdouglas1999.tally.ui.components.gameActions
 import io.github.scdouglas1999.tally.ui.components.phone.PhoneGameCard
 import io.github.scdouglas1999.tally.ui.components.phone.PhoneGamePanel
 import io.github.scdouglas1999.tally.ui.player.TallyPlayerViewModel
+import io.github.scdouglas1999.tally.ui.player.controls.phone.playerStatusStrip
 import io.github.scdouglas1999.tally.ui.player.gamelessChannelGames
 import io.github.scdouglas1999.tally.ui.player.phone.LiveTopBarAction
 import io.github.scdouglas1999.tally.ui.player.phone.LiveTopBarActions
@@ -68,7 +69,10 @@ private enum class LivePanel { GAMES, BOX_SCORE }
 /** The score bug and the banner sit this far from the picture's edges. */
 private val OverlayMargin = 16.dp
 
-/** Height of the phone controls' top bar (a 48dp row with 8dp around it): the bug moves under it while it shows. */
+/**
+ * Height of the phone controls' top bar (a 48dp row with 8dp around it) under the status strip: the bug moves under
+ * it while it shows.
+ */
 private val ControlsTopBar = 64.dp
 
 private const val BUG_LINGER_MS = 8_000L
@@ -170,7 +174,7 @@ fun PhoneLivePlayback(
         val safe = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)
         // Under the controls' top bar while it shows, in the corner otherwise.
         val overlayTop by animateDpAsState(
-            targetValue = if (controlsVisible) ControlsTopBar else OverlayMargin,
+            targetValue = if (controlsVisible) playerStatusStrip() + ControlsTopBar else OverlayMargin,
             animationSpec = tween(FADE_MS),
             label = "liveOverlayTop",
         )

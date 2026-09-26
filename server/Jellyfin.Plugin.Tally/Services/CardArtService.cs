@@ -176,13 +176,38 @@ public sealed class CardArtService
             .Select(x => x.Channel)
             .ToList();
 
-    public async Task<byte[]> RenderAsync(SourceChannel channel, CancellationToken ct)
+    /// <summary>The channel's card, <paramref name="width"/> wide (null: full size, see <see cref="ArtRequest.SnapWidth"/>),
+    /// with its times in <paramref name="zone"/> (null: the server's zone).</summary>
+    public async Task<byte[]> RenderAsync(SourceChannel channel, int? width, TimeZoneInfo? zone, CancellationToken ct)
     {
         var games = await GetChannelGamesAsync(ct).ConfigureAwait(false);
         games.TryGetValue(channel.Id, out var game);
 
         var now = DateTimeOffset.UtcNow;
-        var key = channel.Id + "|" + Version(game, now) + "|" + channel.Name;
+        zone ??= TimeZoneInfo.Local;
+        var key = CacheKey(channel.Id, Version(game, now), channel.Name, game == null ? null : zone, null);
+        if (width is { } w)
+        {
+            var sizedKey = CacheKey(channel.Id, Version(game, now), channel.Name, game == null ? null : zone, w);
+            if (_cards.TryGetValue(sizedKey, out var sized))
+            {
+                return sized;
+            }
+
+            var full = await RenderFullAsync(channel, game, zone, now, key, ct).ConfigureAwait(false);
+            return Store(sizedKey, ArtRequest.Scale(full, w));
+        }
+
+        return await RenderFullAsync(channel, game, zone, now, key, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>Cache key of one drawn card: the channel, what is on it, the zone its times are in (matchup cards only:
+    /// a title card shows no time) and its width (null: full size).</summary>
+    public static string CacheKey(string channelId, string version, string name, TimeZoneInfo? zone, int? width)
+        => channelId + "|" + version + "|" + name + "|" + (zone == null ? "-" : ArtRequest.ZoneKey(zone)) + "|" + (width?.ToString(CultureInfo.InvariantCulture) ?? "full");
+
+    private async Task<byte[]> RenderFullAsync(SourceChannel channel, GameInfo? game, TimeZoneInfo zone, DateTimeOffset now, string key, CancellationToken ct)
+    {
         if (_cards.TryGetValue(key, out var cached))
         {
             return cached;
@@ -193,13 +218,18 @@ public sealed class CardArtService
         {
             var away = await GetDarkLogoAsync(game.Away.Logo, ct).ConfigureAwait(false);
             var home = await GetDarkLogoAsync(game.Home.Logo, ct).ConfigureAwait(false);
-            png = RenderMatchup(game, away, home, TimeZoneInfo.Local, now);
+            png = RenderMatchup(game, away, home, zone, now);
         }
         else
         {
             png = RenderTitle(channel.Name, channel.Group);
         }
 
+        return Store(key, png);
+    }
+
+    private byte[] Store(string key, byte[] png)
+    {
         if (_cards.Count > 400)
         {
             _cards.Clear();

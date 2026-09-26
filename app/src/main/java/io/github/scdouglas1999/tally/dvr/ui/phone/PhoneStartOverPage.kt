@@ -59,6 +59,7 @@ import io.github.scdouglas1999.tally.ui.phone.phoneSystemBack
 import io.github.scdouglas1999.tally.ui.player.controls.PlayerFormat
 import io.github.scdouglas1999.tally.ui.player.controls.TrackCanvas
 import io.github.scdouglas1999.tally.ui.player.controls.phone.PhonePlayerWindow
+import io.github.scdouglas1999.tally.ui.player.controls.phone.playerTopBarInset
 import io.github.scdouglas1999.tally.ui.theme.PhoneDimens
 import io.github.scdouglas1999.tally.ui.theme.PhoneType
 import io.github.scdouglas1999.tally.ui.theme.TallyColors
@@ -122,7 +123,12 @@ fun PhoneStartOverPage(
                 Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.displayCutout)) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(8.dp),
+                        modifier =
+                            Modifier
+                                .align(Alignment.TopCenter)
+                                .fillMaxWidth()
+                                .playerTopBarInset()
+                                .padding(8.dp),
                     ) {
                         PhoneTopBarAction(
                             glyph = R.string.tally_phone_fa_arrow_left,

@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Net;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
@@ -424,63 +423,7 @@ public sealed class InstallerFlow(Ui ui, Options options, HttpClient http, Certi
 
     // ---- step 3: the server ----
 
-    private async Task<string?> AskServerAsync(CancellationToken ct)
-    {
-        var checker = new JellyfinServer(http);
-        var typed = options.Server;
-        if (typed is null)
-        {
-            ui.Say("Type the address of the Jellyfin server Tally should use: the one you open Jellyfin with " +
-                   "(for example https://jellyfin.example.com, or 192.168.1.10 for a server at home).");
-        }
-
-        while (true)
-        {
-            typed ??= ui.Ask("Server address:");
-            if (typed.Length == 0)
-            {
-                if (options.Yes)
-                {
-                    return null;
-                }
-
-                typed = null;
-                continue;
-            }
-
-            ui.Progress($"Checking {typed}…");
-            var (server, problems) = await checker.CheckAsync(typed, ct).ConfigureAwait(false);
-            if (server is not null)
-            {
-                ui.Good($"Found {(server.Name.Length > 0 ? server.Name : "the server")} (Jellyfin {server.Version}) at {server.Address}.");
-                if (!server.HasTvApp)
-                {
-                    ui.Problem("This server does not have Tally's TV app yet (its Tally plugin is missing or older). " +
-                               "Tally will install, and the TV will say so until the server's owner installs or updates the Tally plugin.");
-                    if (!Confirm("Install anyway?", true))
-                    {
-                        return null;
-                    }
-                }
-
-                return server.Address;
-            }
-
-            ui.Problem($"No Jellyfin server answered at {typed}.");
-            foreach (var p in problems)
-            {
-                ui.Detail("  " + p);
-            }
-
-            ui.Say("Check the address (it is the one you type in a browser to open Jellyfin, with :8096 or https:// if you use them) and that this PC can open it.");
-            if (options.Yes)
-            {
-                return null;
-            }
-
-            typed = null;
-        }
-    }
+    private Task<string?> AskServerAsync(CancellationToken ct) => new ServerStep(ui, http, options.Yes).AskAsync(options.Server, ct);
 
     // ---- step 4: install ----
 
@@ -520,13 +463,7 @@ public sealed class InstallerFlow(Ui ui, Options options, HttpClient http, Certi
             }
         }
 
-        ui.Blank();
-        ui.Say("On the TV, Tally shows a 6-digit code. To sign in:\n" +
-               "  1. On your phone (or a computer), open Jellyfin" + (server is null ? "" : $" ({server})") + " and sign in.\n" +
-               "  2. Open Settings (your profile picture) > Quick Connect.\n" +
-               "  3. Type the code from the TV and press Authorize. The TV signs in by itself.");
-        ui.Detail("Updates come from the server: when its Tally plugin is updated, the TV app is too. " +
-                  "Run this program again only if Tally on the TV asks to be reinstalled.");
+        Handoff.SignIn(ui, server);
         return 0;
     }
 
@@ -799,28 +736,7 @@ public sealed class InstallerFlow(Ui ui, Options options, HttpClient http, Certi
         _ => major >= 11 ? 2016 + major : null,
     };
 
-    public static void OpenInBrowser(string url)
-    {
-        try
-        {
-            if (OperatingSystem.IsWindows())
-            {
-                Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
-            }
-            else if (OperatingSystem.IsMacOS())
-            {
-                Process.Start("open", url);
-            }
-            else
-            {
-                Process.Start("xdg-open", url);
-            }
-        }
-        catch (Exception)
-        {
-            // the address is printed as well
-        }
-    }
+    public static void OpenInBrowser(string url) => Browser.Open(url);
 }
 
 /// <summary>What a .wgt from someone else is: Tally or not, how it is signed, and for which TVs.</summary>

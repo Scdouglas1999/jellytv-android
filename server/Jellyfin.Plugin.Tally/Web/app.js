@@ -1323,6 +1323,7 @@ async function renderSettings(content) {
           </div>
         </div>
       </div>
+      ${lgDevModeLine()}
     </div>
 
     <div id="jtv-dvr"></div>
@@ -1350,6 +1351,17 @@ async function renderSettings(content) {
 
   renderDvr($('#jtv-dvr', content), isAdmin, true);
   if (isAdmin) renderAdmin($('#jtv-admin', content), true);
+}
+
+// LG TVs installed with Tally for LG: this server keeps their Developer Mode on (LgDevModeService).
+function lgDevModeLine() {
+  const lg = state.status && state.status.lgDevMode;
+  if (!lg || !lg.tvs) return '';
+  const tvs = lg.tvs === 1 ? '1 TV' : lg.tvs + ' TVs';
+  const when = lg.renewedAt ? ' · renewed ' + (new Date(lg.renewedAt).toDateString() === new Date().toDateString()
+    ? fmtTime(lg.renewedAt) : fmtWhen(lg.renewedAt)) : ' · renewing…';
+  const problem = lg.failing ? `<div class="set-note">Renewing failed for ${lg.failing === 1 ? '1 TV' : lg.failing + ' TVs'}${lg.lastError ? ': ' + esc(lg.lastError) : ''}. Open Developer Mode on the TV and check that it is on and signed in.</div>` : '';
+  return `<div class="set-note" id="lg-devmode">LG Developer Mode kept on for ${esc(tvs + when)}</div>${problem}`;
 }
 
 // The install page as the server says friends should reach it (its configured public address, else this one).
@@ -1589,7 +1601,7 @@ function dvrJobRow(j, canManage) {
   const live = j.state === 'recording';
   const bits = [j.game.league, fmtWhen(j.game.start), DVR_STATE[j.state] || j.state];
   if (live || j.state === 'finishing') bits.push(fmtSpan((j.seconds || 0) * 1000) + ' · ' + fmtBytes(j.bytes) + (j.channelName ? ' · ' + j.channelName : ''));
-  if (j.state === 'done') bits.push(fmtSpan((j.seconds || 0) * 1000) + ' · ' + fmtBytes(j.fileBytes) + (j.itemId ? ' · in the library' : ''));
+  if (j.state === 'done') bits.push(fmtSpan((j.seconds || 0) * 1000) + ' · ' + fmtBytes(j.fileBytes) + (j.itemId ? ' · in the library' : j.libraryState === 'noLibrary' ? ' · not in a library' : j.libraryState === 'adding' ? ' · being added to the library' : ''));
   const btns = [];
   if (live && j.startOverPath) btns.push(`<button class="btn btn-ghost" data-dvr-watch="${esc(j.id)}">Watch from start</button>`);
   if (canManage && ['scheduled', 'waiting', 'recording'].includes(j.state)) btns.push(`<button class="btn btn-danger" data-dvr-cancel="${esc(j.id)}">${live ? 'Stop' : 'Cancel'}</button>`);
@@ -1671,7 +1683,9 @@ async function renderDvr(container, isAdmin, fresh) {
       <div class="f-row"><label for="dvr-days">Delete recordings after (days, 0 = never)</label><input type="number" id="dvr-days" min="0" max="3650" value="${s.deleteAfterDays}"></div>
       <div class="f-row"><label>Library</label>
         ${admin.library ? `<div class="set-note">Recordings appear in the Jellyfin library "${esc(admin.library)}".</div>`
-          : `<div class="set-note">No Jellyfin library includes the recordings folder yet, so finished recordings are only files on the drive.</div>
+          : `<div class="set-note">No Jellyfin library includes the recordings folder, so finished recordings are only files on the drive and the apps cannot play them. ${admin.libraryAutoCreatedAt
+              ? 'Tally created a Sports Recordings library for them once and does not create another by itself.'
+              : 'Tally creates a Sports Recordings library by itself when the next recording finishes, or you can create it now.'}</div>
              <div><button class="btn btn-ghost" id="dvr-lib">Create a Sports Recordings library</button></div>`}</div>
       <div class="set-actions"><button class="btn btn-primary" id="dvr-save">Save recording settings</button></div>
       <div id="dvr-set-msg" class="set-msg" role="status"></div>

@@ -30,6 +30,7 @@ public class TallyController : ControllerBase
     private readonly ScoreboardService _scoreboard;
     private readonly IAuthorizationContext _authContext;
     private readonly BrowserRuntime _browser;
+    private readonly LgDevModeService _lgDevMode;
     private readonly ILogger<TallyController> _logger;
 
     public TallyController(
@@ -39,8 +40,10 @@ public class TallyController : ControllerBase
         ScoreboardService scoreboard,
         IAuthorizationContext authContext,
         BrowserRuntime browser,
+        LgDevModeService lgDevMode,
         ILogger<TallyController> logger)
     {
+        _lgDevMode = lgDevMode;
         _sourceManager = sourceManager;
         _signer = signer;
         _settingsStore = settingsStore;
@@ -71,9 +74,14 @@ public class TallyController : ControllerBase
             webLook = Plugin.Instance?.Configuration.WebLook ?? true,
             getUrl = GetController.ServerAddress(Request) + "/JellyTV/Get",
             // the headless browser web page sources use: idle (not needed yet), preparing, ready or failed
-            browser = BrowserJson(_browser.Status)
+            browser = BrowserJson(_browser.Status),
+            // LG TVs whose Developer Mode this server keeps on (the settings page's line); no tokens
+            lgDevMode = LgJson(_lgDevMode.Summary())
         });
     }
+
+    private static object LgJson(LgDevModeSummary s)
+        => new { tvs = s.Tvs, renewedAt = s.RenewedAt, failing = s.Failing, lastError = s.LastError };
 
     private static object BrowserJson(BrowserRuntime.StatusInfo b)
         => new { state = b.State, message = b.Message, browser = b.Browser, downloadMb = b.DownloadMb };
