@@ -28,6 +28,9 @@ import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.ScheduledThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 
 /** One known address of a server. [home]: reached over the home network (see [isHomeHost], LocalAddress, discovery). */
@@ -109,6 +112,10 @@ class ServerRouter(
     private val probeClient: OkHttpClient = defaultProbeClient(),
     private val clock: () -> Long = System::currentTimeMillis,
     private val homeHost: (String) -> Boolean = ::isHomeHost,
+    /** The app's sockets: those to an address found dead are closed, so requests stuck on it move on. */
+    private val sockets: RouteSockets? = null,
+    /** How long a request may wait for its answer before the address it went to is checked. */
+    private val hungAfterMs: Long = HUNG_AFTER_MS,
 ) {
     private class Address(
         val base: String,
@@ -128,6 +135,15 @@ class ServerRouter(
         @Volatile var socketBase: String? = null
 
         @Volatile var lastEmptyProbeAt = 0L
+
+        /** The address being checked for a request that got no answer ([checkHung]), else null. */
+        @Volatile var hungCheck: String? = null
+
+        /** When an address last answered such a check: requests slow on a live server do not check it again at once. */
+        @Volatile var aliveAt = 0L
+
+        /** The address the route last left because it stopped answering (until the route goes back to it). */
+        @Volatile var failedFrom: String? = null
 
         /** Addresses where another server answered: never learned again (until the app restarts). */
         val refused: MutableSet<String> = ConcurrentHashMap.newKeySet()
@@ -292,8 +308,16 @@ class ServerRouter(
             }
         val first = request.newBuilder().url(rebase(request.url, base.url, activeUrl)).build()
         val failure: IOException
+        // a request still waiting after a moment has its address checked: a path that accepts and never answers
+        // is left within seconds, not after the read timeout
+        val watchdog = if (hasAlternative) watch(route, active) else null
         try {
-            val response = attemptChain.proceed(first)
+            val response =
+                try {
+                    attemptChain.proceed(first)
+                } finally {
+                    watchdog?.cancel(false)
+                }
             if (!hasAlternative || !gatewayFailure(request, response)) {
                 if (response.code == 101) route.socketBase = active
                 return response
@@ -327,6 +351,58 @@ class ServerRouter(
         val response = chain.proceed(request.newBuilder().url(rebase(request.url, base.url, nextUrl)).build())
         if (response.code == 101) route.socketBase = next
         return response
+    }
+
+    private val watchdogs: ScheduledThreadPoolExecutor by lazy {
+        ScheduledThreadPoolExecutor(2) { runnable ->
+            Thread(runnable, "tally-route-watchdog").apply { isDaemon = true }
+        }.apply { removeOnCancelPolicy = true }
+    }
+
+    private fun watch(
+        route: Route,
+        address: String,
+    ): ScheduledFuture<*>? =
+        try {
+            watchdogs.scheduleWithFixedDelay({ checkHung(route, address) }, hungAfterMs, HUNG_REPEAT_MS, TimeUnit.MILLISECONDS)
+        } catch (e: RejectedExecutionException) {
+            null
+        }
+
+    /**
+     * A request to [address] got no answer for a while. The address is asked `/System/Info/Public` on a new
+     * connection: when it answers, the server is only slow and the request keeps waiting. When it does not and another
+     * address of the server answers, the route moves there and the sockets still open to [address] are closed: the
+     * requests waiting on them fail now and are sent again to the new address ([intercept]). Repeated while the
+     * request waits: once the route has left [address] as dead, connections opened to it since (OkHttp's own retry of
+     * a closed connection) are closed too.
+     */
+    private fun checkHung(
+        route: Route,
+        address: String,
+    ) {
+        if (route.active != address) {
+            if (route.failedFrom == address) sockets?.closeTo(address)
+            return
+        }
+        synchronized(route.lock) {
+            if (route.hungCheck != null || clock() - route.aliveAt < HUNG_RECHECK_MS) return
+            route.hungCheck = address
+        }
+        try {
+            if (probe(route.serverId, listOf(address))[address] is ProbeResult.Ok) {
+                route.aliveAt = clock()
+                return
+            }
+            Timber.i("Server route for %s: %s accepts requests but does not answer", route.serverId, address)
+            val next = failover(route, address)
+            if (next != null && next != address) {
+                val closed = sockets?.closeTo(address) ?: 0
+                Timber.i("Server route for %s: closed %d connection(s) to %s", route.serverId, closed, address)
+            }
+        } finally {
+            route.hungCheck = null
+        }
     }
 
     /**
@@ -373,6 +449,7 @@ class ServerRouter(
         val from = route.active
         route.active = to
         route.lastEmptyProbeAt = 0L
+        route.failedFrom = if (failure) from else route.failedFrom?.takeIf { it != to }
         if (failure) lastFailoverAt = clock()
         Timber.i("Server route for %s: %s -> %s (%s)", route.serverId, from, to, reason)
         persist()
@@ -543,6 +620,15 @@ class ServerRouter(
         const val PROBE_TIMEOUT_MS = 2_500L
         const val ALTERNATIVE_CONNECT_TIMEOUT_MS = 4_000L
         const val EMPTY_PROBE_COOLDOWN_MS = 3_000L
+
+        /** A request with no answer after this long has its address checked (a live server answers a probe at once). */
+        const val HUNG_AFTER_MS = 2_000L
+
+        /** An address that answered a check is not checked again for this long. */
+        const val HUNG_RECHECK_MS = 5_000L
+
+        /** How often a request that is still waiting has its address checked again. */
+        const val HUNG_REPEAT_MS = 1_000L
         const val MAX_ADDRESSES = 8
 
         fun defaultProbeClient(): OkHttpClient =

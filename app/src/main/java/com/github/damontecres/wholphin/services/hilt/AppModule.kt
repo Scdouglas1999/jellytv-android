@@ -104,6 +104,10 @@ object AppModule {
                 // TALLY: begin
                 // every request to a known server goes to its active address: home network or internet
                 addInterceptor(io.github.scdouglas1999.tally.lan.TallyServerRoute.interceptor)
+                // its sockets are closed when that address stops answering: waiting requests move on at once
+                socketFactory(io.github.scdouglas1999.tally.lan.TallyServerRoute.sockets)
+                // idle connections are let go before the server closes them (a reused one was reset)
+                connectionPool(io.github.scdouglas1999.tally.lan.TallyServerRoute.connectionPool)
                 // TALLY: end
             }.build()
 
