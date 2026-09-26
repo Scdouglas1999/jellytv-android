@@ -70,8 +70,34 @@ export interface DvrJob {
   seconds: number;
   fileBytes: number;
   itemId: string | null;
+  /** Whether the recording can be played from a library yet (contract 3; resolved by `libraryStateOf`). */
+  libraryState: LibraryState;
   /** Root-relative, signed start-over playlist, while recording. */
   startOverPath: string | null;
+}
+
+/**
+ * Where a recording's library item stands (plugin contract 3): `ready` = it has an `itemId`; `adding` = a library
+ * covers the recordings folder but Jellyfin has not picked the file up yet; `noLibrary` = no library covers the
+ * folder. An older plugin sends no field: without an `itemId` that reads as `adding`.
+ */
+export type LibraryState = 'ready' | 'adding' | 'noLibrary';
+
+export function libraryStateOf(itemId: string | null, raw: unknown): LibraryState {
+  if (itemId !== null && itemId !== '') return 'ready';
+  return raw === 'noLibrary' ? 'noLibrary' : 'adding';
+}
+
+/** What the app says instead of playing a recording that has no library item (contract 3's wording). */
+export function libraryNotice(state: LibraryState): string | null {
+  switch (state) {
+    case 'ready':
+      return null;
+    case 'adding':
+      return 'Still being added to the library. Try again in a minute.';
+    case 'noLibrary':
+      return 'This server has no library for recordings yet. Its owner can add one under Settings → Recordings.';
+  }
 }
 
 /** `GET /recordings/storage[?gameId=]`. */
@@ -159,6 +185,7 @@ function decodeJob(v: unknown): DvrJob {
     seconds: num(o.seconds),
     fileBytes: num(o.fileBytes),
     itemId: strOrNull(o.itemId),
+    libraryState: libraryStateOf(strOrNull(o.itemId), o.libraryState),
     startOverPath: strOrNull(o.startOverPath),
   };
 }
@@ -195,6 +222,7 @@ export interface GameRecordingView {
   startedAt: string | null;
   startOverPath: string | null;
   itemId: string | null;
+  libraryState: LibraryState;
   reason: string | null;
   seconds: number;
 }
@@ -226,13 +254,14 @@ export function recordingView(game: TallyGame, list: DvrList | null): GameRecord
       startedAt: job.startedAt,
       startOverPath: job.startOverPath ?? (job.state === DvrState.RECORDING ? (game.recording?.startOverPath ?? null) : null),
       itemId: job.itemId,
+      libraryState: job.libraryState,
       reason: job.reason,
       seconds: job.seconds,
     };
   }
   const board = game.recording;
   if (board === null) return null;
-  return { state: board.state, jobId: board.jobId, startedAt: null, startOverPath: board.startOverPath, itemId: board.itemId, reason: board.reason, seconds: 0 };
+  return { state: board.state, jobId: board.jobId, startedAt: null, startOverPath: board.startOverPath, itemId: board.itemId, libraryState: board.libraryState, reason: board.reason, seconds: 0 };
 }
 
 /** A finished game that has (or is making) a recording keeps its score and result out of sight (no spoilers). */

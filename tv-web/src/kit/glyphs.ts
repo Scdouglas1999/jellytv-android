@@ -32,6 +32,10 @@ export const Glyph = {
   stepForward: '',
   bookmark: '',
   list: '',
+  backwardFast: '',
+  arrowUp: '',
+  arrowDown: '',
+  ellipsisVertical: '',
 } as const;
 
 export type GlyphName = keyof typeof Glyph;

@@ -8,11 +8,12 @@
 import { getLibraryApi } from '@jellyfin/sdk/lib/utils/api/library-api';
 import { useEffect } from 'preact/hooks';
 import { currentApi, session } from '../../api/jellyfin';
-import { DvrError, dvrApi, type DvrList, type DvrStorage } from '../../api/tallyDvr';
+import { DvrError, dvrApi, type DvrList, type DvrStorage, type LibraryState } from '../../api/tallyDvr';
 import type { TallyGame, TallyTeam } from '../../api/tallyModels';
 import { showToast } from '../../kit/Toast';
 import { push } from '../../router/router';
 import { tally } from '../../state/nav';
+import { showRecordingNotice } from './RecordingNotice';
 import { refreshBoard } from '../../state/sportsData';
 import { createStore, useStore } from '../../util/store';
 
@@ -119,10 +120,13 @@ export const dvrActions = {
   deleteRule: (ruleId: string): Promise<void> => act(() => dvrApi.deleteRule(ruleId)),
 };
 
-/** Plays a finished recording (a library item) from where this user stopped watching it. */
-export async function playRecording(itemId: string | null): Promise<void> {
-  if (itemId === null) {
-    showToast('This recording is still being added to the library.');
+/**
+ * Plays a finished recording (a library item) from where this user stopped watching it; without an item yet, the
+ * notice says why (contract 3: still being added, or no library for recordings on the server).
+ */
+export async function playRecording(itemId: string | null, libraryState: LibraryState = 'adding', title = ''): Promise<void> {
+  if (itemId === null || itemId === '') {
+    showRecordingNotice(libraryState === 'ready' ? 'adding' : libraryState, title);
     return;
   }
   const s = session.get();

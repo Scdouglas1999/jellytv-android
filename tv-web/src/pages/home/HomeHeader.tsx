@@ -3,7 +3,7 @@ import { useState } from 'preact/hooks';
 import { logoUrl } from '../../api/images';
 import type { TallyGame } from '../../api/tallyModels';
 import { episodeCode } from '../../kit/ItemCard';
-import { formatRuntime, formatTime, gameStatusLabel, tallyUppercase } from '../../util/format';
+import { formatRuntime, formatTime, gameStatusLabel, hasNoResult, tallyUppercase } from '../../util/format';
 
 export type HomeFocus = { kind: 'item'; item: BaseItemDto; rowTitle: string } | { kind: 'game'; game: TallyGame; hideScores: boolean } | null;
 
@@ -74,25 +74,35 @@ function ItemHeader(props: { item: BaseItemDto; rowTitle: string }) {
   );
 }
 
+/**
+ * The header's lines for a focused game (ui/home/TallyHomeHeader.kt TallyGameHeader): kicker `MLB · TOP 3RD` (the
+ * league, never the sport), the matchup, the score line (the broadcasts for a game that has not started or has no
+ * result), and the last play as the overview line (else "On ESPN" under a score). With scores hidden there is no
+ * score and no last play.
+ */
+export function gameHeaderText(game: TallyGame, hideScores: boolean, now?: Date): { kicker: string; title: string; meta: string; overview: string } {
+  const name = (t: TallyGame['away']): string => (t.shortName !== '' ? t.shortName : t.abbr !== '' ? t.abbr : t.name);
+  const kicker = [game.league, gameStatusLabel(game, now)].filter((x) => x.trim() !== '').join(' · ');
+  const showScore = !hideScores && game.state !== 'pre' && !hasNoResult(game.state, game.detail);
+  const meta = showScore ? `${game.away.abbr} ${game.away.score ?? 0} · ${game.home.abbr} ${game.home.score ?? 0}` : game.broadcasts.join(' · ');
+  const overview = hideScores
+    ? ''
+    : game.lastPlay !== null && game.lastPlay.trim() !== ''
+      ? game.lastPlay
+      : showScore && game.broadcasts.length > 0
+        ? `On ${game.broadcasts.join(', ')}`
+        : '';
+  return { kicker, title: `${name(game.away)} at ${name(game.home)}`, meta, overview };
+}
+
 function GameHeader(props: { game: TallyGame; hideScores: boolean }) {
-  const { game } = props;
-  const away = game.away.shortName !== '' ? game.away.shortName : game.away.abbr;
-  const home = game.home.shortName !== '' ? game.home.shortName : game.home.abbr;
-  const kicker = [game.sport, gameStatusLabel(game)].filter((x) => x !== '').join(' · ');
-  const score =
-    game.state !== 'pre' && !props.hideScores
-      ? `${game.away.abbr} ${game.away.score ?? 0} · ${game.home.abbr} ${game.home.score ?? 0}`
-      : game.watch !== null
-        ? game.watch.channelName
-        : 'Not on your channels';
+  const t = gameHeaderText(props.game, props.hideScores);
   return (
     <>
-      <div class="kicker mono-label">{tallyUppercase(kicker)}</div>
-      <div class="title ellipsis">
-        {away} at {home}
-      </div>
-      <Meta parts={[{ text: score }]} />
-      {game.lastPlay !== null && !props.hideScores ? <div class="overview clamp-2">{game.lastPlay}</div> : null}
+      <div class="kicker mono-label ellipsis">{tallyUppercase(t.kicker)}</div>
+      <div class="title ellipsis">{t.title}</div>
+      <Meta parts={t.meta !== '' ? [{ text: t.meta }] : []} />
+      {t.overview !== '' ? <div class="overview clamp-2">{t.overview}</div> : null}
     </>
   );
 }

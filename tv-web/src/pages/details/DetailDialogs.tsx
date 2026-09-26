@@ -16,7 +16,18 @@ import { isPlayable, openDetails, playItem } from './navigate';
 export type Trailer = { kind: 'local'; item: BaseItemDto } | { kind: 'remote'; url: MediaUrl };
 
 export type Dialog =
-  | { kind: 'menu'; item: BaseItemDto; goTo?: () => void; returnKey: string }
+  | {
+      kind: 'menu';
+      item: BaseItemDto;
+      goTo?: () => void;
+      returnKey: string;
+      /** Opened on a Continue watching card (Android's canRemoveContinueWatching): offers Remove from continue watching. */
+      continueWatching?: boolean;
+      /** Runs as Remove from continue watching is chosen (the row drops the card at once). */
+      onRemovedFromContinueWatching?: () => void;
+      /** Opened in a playlist its user can edit (Android's showRemoveFromPlaylist): offers Remove from playlist. */
+      onRemoveFromPlaylist?: () => void;
+    }
   | { kind: 'person'; personId: string; name: string; returnKey: string }
   | { kind: 'overview'; title: string; text: string; returnKey: string }
   | { kind: 'confirm'; title: string; body: string; confirmLabel: string; onConfirm: () => void; returnKey: string }
@@ -42,7 +53,13 @@ export function onTrailer(trailers: Trailer[], open: () => void): void {
   else if (trailers.length > 1) open();
 }
 
-function itemMenuEntries(item: BaseItemDto, goTo: (() => void) | undefined, run: (action: () => void | Promise<void>, changed?: boolean) => void, sub: (d: Dialog) => void, returnKey: string): PanelEntry[] {
+/**
+ * The item menu's entries, in upstream's order (TallyContextMenu.kt itemMenuActions): Go to, Resume / Play from
+ * start or Play, Remove from playlist, Add to playlist, Remove from continue watching, Mark watched, Favorite, Go to
+ * series, Media information.
+ */
+export function itemMenuEntries(d: Extract<Dialog, { kind: 'menu' }>, run: (action: () => void | Promise<void>, changed?: boolean) => void, sub: (d: Dialog) => void): PanelEntry[] {
+  const { item, goTo, returnKey } = d;
   const entries: PanelEntry[] = [];
   if (goTo !== undefined) entries.push({ key: 'goto', label: 'Go to', onPress: () => run(goTo) });
   if (isPlayable(item)) {
@@ -53,8 +70,22 @@ function itemMenuEntries(item: BaseItemDto, goTo: (() => void) | undefined, run:
       entries.push({ key: 'play', label: 'Play', onPress: () => run(() => playItem(item, true)) });
     }
   }
+  const removeFromPlaylist = d.onRemoveFromPlaylist;
+  if (removeFromPlaylist !== undefined) entries.push({ key: 'unlist', label: 'Remove from playlist', onPress: () => run(removeFromPlaylist) });
   entries.push({ key: 'playlist', label: 'Add to playlist', onPress: () => sub({ kind: 'playlists', item, returnKey }) });
   const played = item.UserData?.Played === true;
+  // upstream's "Remove from continue watching" is its Mark unwatched: the resume point goes, the card leaves the row
+  if (d.continueWatching === true && !played && (item.UserData?.PlaybackPositionTicks ?? 0) > 0) {
+    entries.push({
+      key: 'uncontinue',
+      label: 'Remove from continue watching',
+      onPress: () =>
+        run(() => {
+          d.onRemovedFromContinueWatching?.();
+          return setPlayed(item.Id ?? '', false);
+        }, true),
+    });
+  }
   entries.push({ key: 'watched', label: played ? 'Mark unwatched' : 'Mark watched', onPress: () => run(() => setPlayed(item.Id ?? '', !played), true) });
   const favorite = item.UserData?.IsFavorite === true;
   entries.push({ key: 'favorite', label: favorite ? 'Unfavorite' : 'Favorite', onPress: () => run(() => setFavorite(item.Id ?? '', !favorite), true) });
@@ -145,7 +176,7 @@ export function DetailDialogs(props: { dialog: Dialog | null; setDialog: (d: Dia
   };
   switch (d.kind) {
     case 'menu':
-      return <Panel key={'menu-' + (d.item.Id ?? '')} title={d.item.Name ?? ''} entries={itemMenuEntries(d.item, d.goTo, run, (next) => props.setDialog(next), d.returnKey)} focusKey={focusKey} onClose={close} />;
+      return <Panel key={'menu-' + (d.item.Id ?? '')} title={d.item.Name ?? ''} entries={itemMenuEntries(d, run, (next) => props.setDialog(next))} focusKey={focusKey} onClose={close} />;
     case 'person':
       return <PersonPanel personId={d.personId} name={d.name} focusKey={focusKey} onClose={close} />;
     case 'overview':
@@ -184,6 +215,6 @@ export function DetailDialogs(props: { dialog: Dialog | null; setDialog: (d: Dia
 }
 
 /** The menu of a card in a row (Go to, play, watched, favorite…), for the MENU key. */
-export function cardMenu(item: BaseItemDto, returnKey: string, goTo: () => void = () => openDetails(item)): Dialog {
+export function cardMenu(item: BaseItemDto, returnKey: string, goTo: () => void = () => openDetails(item)): Extract<Dialog, { kind: 'menu' }> {
   return { kind: 'menu', item, goTo, returnKey };
 }

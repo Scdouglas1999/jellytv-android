@@ -12,6 +12,8 @@ export interface HomeRowSpec {
   title: string;
   shape: 'poster' | 'landscape';
   watching: boolean;
+  /** Continue watching: its item menu offers Remove from continue watching (Android's canRemoveContinueWatching). */
+  continueWatching?: boolean;
   load: () => Promise<BaseItemDto[]>;
 }
 
@@ -29,6 +31,7 @@ export function homeRows(views: readonly BaseItemDto[]): HomeRowSpec[] {
       title: 'Continue watching',
       shape: 'poster',
       watching: true,
+      continueWatching: true,
       load: async () =>
         (
           await getLibraryApi(currentApi()).getResumeItems({

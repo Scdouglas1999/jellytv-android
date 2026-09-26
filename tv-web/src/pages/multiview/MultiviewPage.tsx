@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { absolute } from '../../api/tally';
+import { absolute, artUrl } from '../../api/tally';
 import { isLive, type TallyGame, type TallyTeam } from '../../api/tallyModels';
 import { app } from '../../app/context';
 import { useArrivalFocus, type PageProps } from '../../app/page';
@@ -7,6 +7,7 @@ import { currentFocusKey, focusExists, setFocus, useFocusable } from '../../focu
 import { LabelBar, RowHeader } from '../../kit/Bits';
 import { offsetWithin, reveal } from '../../kit/scroll';
 import { ToastHost } from '../../kit/Toast';
+import { RecordingNoticeHost } from '../sports/RecordingNotice';
 import { useKeyHandler } from '../../platform/keyRouter';
 import type { EngineEvents, PlayerEngine } from '../../player/engine';
 import { createHtml5Engine } from '../../player/html5Engine';
@@ -255,6 +256,9 @@ function SwapInRow(props: { index: number; entry: BenchEntry; hideScores: boolea
   );
 }
 
+/** The width a tile's live card is asked for: an equal-grid tile's (half the screen). */
+const TILE_CARD_W = 960;
+
 /**
  * Multiview (TallyMultiviewPage.kt): up to four live channels, a swap-in rail, audio that follows the focused tile.
  * OK promotes a tile into the large slot, or returns the large tile to equal tiles; HOLD opens the tile's actions
@@ -277,7 +281,7 @@ export function MultiviewPage(props: PageProps<Extract<Route, { name: 'multiview
       channelId: id,
       name: channel?.name ?? game?.watch?.channelName ?? '',
       hlsUrl: channel !== null && channel.hlsPath !== '' ? absolute(channel.hlsPath) : null,
-      cardUrl: channel !== null && channel.cardPath !== '' ? absolute(channel.cardPath) : null,
+      cardUrl: channel !== null && channel.cardPath !== '' ? artUrl(channel.cardPath, TILE_CARD_W) : null,
       game,
     };
   });
@@ -504,6 +508,7 @@ export function MultiviewPage(props: PageProps<Extract<Route, { name: 'multiview
         />
       ) : null}
       <ToastHost />
+      <RecordingNoticeHost active={props.active} pageKey={props.pageKey} />
     </div>
   );
 }

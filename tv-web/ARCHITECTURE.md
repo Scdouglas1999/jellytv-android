@@ -88,7 +88,10 @@ Performance rules (the reason a DOM app is quick on a TV):
   writes one element's styles from `requestAnimationFrame`.
 - Images are requested at the size they are drawn (`fillWidth/fillHeight` at the 1080p canvas): backdrops 1400x788
   (their box), team logos through ESPN's image combiner at the mark's size (the board's logos are 500 px PNGs, one
-  NFL logo is 4096 px: 64 MB decoded for a 51 px mark).
+  NFL logo is 4096 px: 64 MB decoded for a 51 px mark). The plugin's own game art (`/JellyTV/Backdrop/…`,
+  `/JellyTV/Card/…`) is asked for with `w=<drawn width>` and `tz=<the TV's zone>` (`api/tally.ts artUrl`, 2.2
+  contracts 1-2: Home's game backdrop 1400, a channel card 384, a multiview tile's card 960); older plugins ignore
+  both. The zone is left out when the runtime does not know it or says UTC while the clock is not at UTC.
 - A backdrop that follows focus (Home, library) changes only once focus rests on a card (`useSettledBackdrop`:
   the old picture goes at once, the new one after 600 ms, as Android's BackdropService), so moving along a row does
   not fetch and decode a large picture per card.
@@ -235,12 +238,14 @@ multiview tiles), `createEngine.ts`, `deviceProfile.ts`, `playback.ts` (Playback
   hls.js, a TV never does.
 - **Live overlays** (`pages/player/LivePage.tsx`, `liveOverlays.tsx`; tvweb-sports), as on the Android TV live player
   (TallyPlaybackPage.kt): the **score bug** (back on open, on every score/period/situation change, while the
-  switcher is up and for 8 s after a key; its digits roll), **UP** = the box score (line score, situation, last
+  switcher is up and for 8 s after a key or a Magic Remote pointer move, which also brings the bar, then it fades; hidden under the box score; drawn above the bars, as Android
+  draws it over its controls; its digits roll), **UP** = the box score (line score, situation, last
   play; closes on the next key or after 12 s), **DOWN** = the "also on now" switcher (other live games on channels
   in board order, or the looping channels when none is live; OK switches in place, HOLD opens the game's actions),
   **event banners** for scoring plays in *other* games (the board poll's `since` events, 8 s, a lower third; never
-  while scores are hidden), CH+/CH- step through the channels, REWIND = watch from the start while the game is being
-  recorded. Verified in Chromium with the score simulator (bump → bug roll + amber flash; bump in another game →
+  while scores are hidden), CH+/CH- step through the channels, WATCH FROM THE START while the game is being recorded: the bar's
+  FROM THE START button (Android's StartOverAction at the end of the controls row; it has focus while the bar is up)
+  and the REWIND key.
   banner).
 - **Reporting**: `/Sessions/Playing` on start, `/Progress` every 10 s, `/Stopped` on leave: resume points and
   Continue Watching stay right (verified in Chromium: start, progress and stopped reports with the real position, all
@@ -435,7 +440,8 @@ Scope, in this order; everything else follows through server updates (no reinsta
    more from the season. Item menu (MORE, or MENU / INFO on a card), trailer list, full overview, series-watched
    confirmation and Add to playlist are Tally panels (`kit/Panel`). New kit: DetailHeader, EpisodeRow, FrameCard /
    PersonCard, Panel. Home and library cards open these pages (`pages/details/navigate.ts`, Android's
-   `destination()`; a box set opens the library grid of its items until tv-web has a collection page).
+   `destination()`; a box set opens the collection page, a playlist the playlist page: `pages/collection/`,
+   `pages/playlist/`, tvweb-gaps).
 5. **Player**: Tally controls (seek bar with trickplay, transport, chapters, next up, skip intro), subtitles, audio,
    quality. *Done in tvweb-player* (`pages/player/`, `pages/postplay/`): the Android TV controls, chapters and queue
    rows, the settings panel (audio, subtitles, speed, scale, subtitle delay, quality, sleep timer), media segments,
@@ -637,10 +643,13 @@ Proposed parallel tasks after tvweb-0: `tvweb-details` (4), `tvweb-library` (3),
   suspend/restore, tracks), and for Sports: the board rows (the Android BoardOrganizer cases), line score labels and
   column fitting, the score roll's offsets and restarts, the followed-team countdown, DVR models and words (the
   Android DvrModelsTest payload), multiview slots, D-pad map and decoder allotment; the player's formats, the Home
-  header's meta line; webOS: the version from deviceInfo and the web engine, Luna calls through a fake
-  PalmServiceBridge, the panel configs, the screensaver requests, the Developer Mode hand-off, the per-generation
-  device profiles, and the webOS engine against a fake `<video>` (native HLS, resume point, audio tracks and webOS
-  5's first track, release on hide, live retries, speed for files only). 160 tests.
+  header's meta line; the collection and playlist pages' meta lines and Jellyfin 10.10's playlist move (every
+  from/to pair measured on the dev server, and the plan that corrects it), the item menu's Remove from continue
+  watching, the plugin art parameters and the recordings' library state; webOS: the version from deviceInfo and the
+  web engine, Luna calls through a fake PalmServiceBridge, the panel configs, the screensaver requests, the
+  Developer Mode hand-off, the per-generation device profiles, and the webOS engine against a fake `<video>`
+  (native HLS, resume point, audio tracks and webOS 5's first track, release on hide, live retries, speed for files
+  only). 177 tests.
 - **Lint** (`npm run lint`): ESLint (typescript-eslint + compat for Chromium 68), `tsc --noEmit` strict, CSS legacy
   check. **Build** adds the ES2019 parse of the bundle.
 - **End-to-end** (`npm run e2e`, Playwright 1.63, Chromium at 1920x1080, the production bundle through
@@ -651,7 +660,10 @@ Proposed parallel tasks after tvweb-0: `tvweb-details` (4), `tvweb-library` (3),
   film playback with a subtitle and an
   audio switch, live channel from the continuous playlist with the score bug; Sports (`e2e/sports.spec.ts`): the
   board and its tabs, HOLD menus, channels, the multiview queue, settings, recordings, four-tile multiview, the live
-  overlays, a team recording rule end to end, the start-over page. Live states come from the score simulator
+  overlays, a team recording rule end to end, the start-over page; the 2.2 gaps (`e2e/gaps.spec.ts`): the collection
+  page (rows, item menu, sort, the mixed grid), the playlist page (move down and back up, Remove from playlist, PLAY
+  from a row), Remove from continue watching, the league in Home's game header, the score bug's show/fade rule (a key, a
+  simulated score change) and FROM THE START, the recording notice and the plugin art parameters. Live states come from the score simulator
   (`tally/dev/score-sim.py`, run with `TALLY_SIM=1`; its parts are skipped without it). Screenshots in
   `test-results/shots/`.
 - **Tizen emulator**: Tizen Studio 6.1 CLI + TV Extension 10.0 in `~/tools/tizen-studio` (installed without root on
@@ -798,7 +810,9 @@ how), **not possible** (and why).
 | Film / series / season / episode pages | done (tvweb-details); adapted: remote (YouTube) trailers open only in a browser (TVs: local trailers), extras of one kind are listed one by one (no grid page), no VERSION / audio / subtitle choice before playing (chosen in the player), no Delete (Android's media-management setting is off by default) |
 | Library grid, tabs, filter/sort, alphabet, genres, recommended | done (play all / shuffle queue the grid's first 100; the item menu on HOLD OK / MENU) |
 | Search (text) | planned; voice: adapted (the TV's own voice/IME input into the field) |
-| Collections, person, favorites, playlists | person done (tvweb-details); a collection opens as a grid of its items (the Android collection page: planned); favorites, playlists planned |
+| Collections, person, favorites, playlists | person done (tvweb-details); collection page (header, PLAY / SHUFFLE / WATCHED / FAVORITE / VIEW / MORE / SORT / FILTER, a row per type or the mixed grid) and playlist page (numbered list, move up/down with Jellyfin 10.10's off-by-one move corrected, Remove from playlist) done (tvweb-gaps; adapted: no Delete, music playlists do not play yet); favorites planned |
+| Item menu: Remove from continue watching (Home's Continue watching row) | done (tvweb-gaps: upstream's Mark unwatched, the card leaves the row at once) |
+| Recordings not in a library (plugin contract 3) | done (tvweb-gaps: the notice in a Tally panel wherever a recording plays) |
 | Music: albums, artists, now playing, lyrics | planned; background music: not possible (web apps stop when hidden) |
 | Player: transport, seek bar, chapters, queue, next up, skip intro/credits (media segments) | done (tvweb-player) |
 | Player: subtitles (text + burned-in), audio tracks | done |

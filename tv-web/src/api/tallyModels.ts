@@ -51,6 +51,8 @@ export interface TallyGameRecording {
   startOverPath: string | null;
   /** The Jellyfin library item of the finished recording, once the server has scanned it. */
   itemId: string | null;
+  /** Whether it plays from a library yet (plugin contract 3, see tallyDvr.ts libraryStateOf). */
+  libraryState: 'ready' | 'adding' | 'noLibrary';
   /** Why it is waiting, why it failed, or why it stopped early. */
   reason: string | null;
 }
@@ -230,6 +232,7 @@ function decodeRecording(v: unknown): TallyGameRecording | null {
     jobId: str(o.jobId),
     startOverPath: strOrNull(o.startOverPath),
     itemId: strOrNull(o.itemId),
+    libraryState: strOrNull(o.itemId) !== null && o.itemId !== '' ? 'ready' : o.libraryState === 'noLibrary' ? 'noLibrary' : 'adding',
     reason: strOrNull(o.reason),
   };
 }

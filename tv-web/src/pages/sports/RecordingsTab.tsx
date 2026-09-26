@@ -59,14 +59,14 @@ function RecordedCard(props: { job: DvrJob }) {
   const [failed, setFailed] = useState(false);
   const f = useFocusable<HTMLDivElement>({
     focusKey: jobFocusKey(job),
-    onEnter: () => void playRecording(job.itemId),
+    onEnter: () => void playRecording(job.itemId, job.libraryState, jobTitle(job)),
     onFocus: () => {
       if (f.ref.current !== null) reveal(f.ref.current);
     },
   });
   const url = job.itemId !== null ? absolute(`/Items/${job.itemId}/Images/Thumb?maxWidth=640`) : null;
   return (
-    <div ref={f.ref} class="card landscape" onClick={() => void playRecording(job.itemId)}>
+    <div ref={f.ref} class="card landscape" onClick={() => void playRecording(job.itemId, job.libraryState, jobTitle(job))}>
       <div class="art">{url !== null && !failed ? <img src={url} alt="" onError={() => setFailed(true)} /> : <div class="art-fallback">{jobTitle(job)}</div>}</div>
       <div class="bar">
         <div class="kicker ellipsis">{tallyUppercase(recordedMeta(job))}</div>

@@ -352,7 +352,7 @@ test('Collections and Music libraries from the rail', async ({ page }, info) => 
   await shot(page, info, 'music-artists');
 });
 
-test('Library cards: HOLD OK / MENU open the item menu; a box set opens its films, an episode its rundown; Play all queues the grid', async ({ page }, info) => {
+test('Library cards: HOLD OK / MENU open the item menu; a box set opens its collection page, an episode its rundown; Play all queues the grid', async ({ page }, info) => {
   await page.route('**/Sessions/Playing**', (route) => route.fulfill({ status: 204 }));
   await openFromRail(page, 'Movies');
   // the Library tab's grid
@@ -407,7 +407,8 @@ test('Library cards: HOLD OK / MENU open the item menu; a box set opens its film
   await stopKey(page);
   await expect(lib(page)).toBeVisible();
 
-  // Collections tab: a box set opens its films (Android's collection page), the rail keeps its light on Movies
+  // Collections tab: a box set opens its collection page (Android's TallyCollectionPage), the rail keeps its light on
+  // Movies
   await expect(caption).toHaveText('PLAY');
   // LEFT along the controls into the tab strip (it takes focus on the current tab), then RIGHT to COLLECTIONS
   const focusedTab = page.locator('.page:not(.hidden) .lib-tab[data-focused]');
@@ -419,9 +420,10 @@ test('Library cards: HOLD OK / MENU open the item menu; a box set opens its film
   await expect(card).toBeVisible();
   const boxSet = (await card.locator('.title').textContent()) ?? '';
   await press(page, 'Enter');
-  await expect(lib(page).locator('.lib-kicker .name')).toHaveText(boxSet.toUpperCase());
-  await expect(lib(page).locator('.lib-kicker .count')).toHaveText(/ · \d+ FILMS?/);
-  await expect(card).toBeVisible();
+  const collection = page.locator('.page:not(.hidden) .collection-page');
+  await expect(collection.locator('.dh-title')).toHaveText(boxSet);
+  await expect(collection.locator('.dh-meta')).toHaveText(/^\d+ FILMS?·/);
+  await expect(collection.locator('.media-row .card').first()).toBeVisible();
   await expect(page.locator('.rail .entry.selected .label')).toHaveText('Movies');
   await settle(page);
   await shot(page, info, 'library-box-set');
