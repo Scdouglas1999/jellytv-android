@@ -136,7 +136,7 @@ public sealed class SshTvConnection : ITvConnection
         }
         catch (Exception ex) when (ex is OperationCanceledException or SshException && !ct.IsCancellationRequested)
         {
-            // cancelled above
+            // canceled above
         }
 
         return all.ToString();

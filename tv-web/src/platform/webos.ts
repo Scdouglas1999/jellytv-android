@@ -110,10 +110,10 @@ export function luna(
   }
   const subscribe = params.subscribe === true;
   const bridge = new Bridge();
-  let cancelled = false;
+  let canceled = false;
   const cancel = (): void => {
-    if (cancelled) return;
-    cancelled = true;
+    if (canceled) return;
+    canceled = true;
     inFlight.delete(bridge);
     try {
       bridge.cancel();
@@ -122,7 +122,7 @@ export function luna(
     }
   };
   bridge.onservicecallback = (message: string) => {
-    if (cancelled) return;
+    if (canceled) return;
     let reply: Record<string, unknown>;
     try {
       reply = JSON.parse(message) as Record<string, unknown>;

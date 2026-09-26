@@ -19,7 +19,7 @@ interface Call {
   uri: string;
   params: Record<string, unknown>;
   reply: (message: Record<string, unknown>) => void;
-  cancelled: boolean;
+  canceled: boolean;
 }
 let calls: Call[];
 let answer: (uri: string, params: Record<string, unknown>) => Record<string, unknown> | null;
@@ -28,14 +28,14 @@ class FakeBridge {
   onservicecallback: ((m: string) => void) | null = null;
   private call_: Call | null = null;
   call(uri: string, params: string): void {
-    const c: Call = { uri, params: JSON.parse(params) as Record<string, unknown>, reply: (m) => this.onservicecallback?.(JSON.stringify(m)), cancelled: false };
+    const c: Call = { uri, params: JSON.parse(params) as Record<string, unknown>, reply: (m) => this.onservicecallback?.(JSON.stringify(m)), canceled: false };
     this.call_ = c;
     calls.push(c);
     const a = answer(uri, c.params);
     if (a !== null) c.reply(a);
   }
   cancel(): void {
-    if (this.call_ !== null) this.call_.cancelled = true;
+    if (this.call_ !== null) this.call_.canceled = true;
   }
 }
 
@@ -85,7 +85,7 @@ describe('Luna calls through PalmServiceBridge', () => {
     expect(calls[0]?.uri).toBe('luna://com.webos.service.tv.systemproperty/getSystemInfo');
     expect(calls[0]?.params).toEqual({ keys: ['UHD'] });
     expect(replies).toEqual([{ returnValue: true }]);
-    expect(calls[0]?.cancelled).toBe(true);
+    expect(calls[0]?.canceled).toBe(true);
   });
 
   it('keeps a subscription open and routes failures to onError', () => {
@@ -99,7 +99,7 @@ describe('Luna calls through PalmServiceBridge', () => {
     calls[0]?.reply({ returnValue: false, errorText: 'nope' });
     expect(replies).toHaveLength(2);
     expect(errors).toEqual([{ returnValue: false, errorText: 'nope' }]);
-    expect(calls[0]?.cancelled).toBe(false);
+    expect(calls[0]?.canceled).toBe(false);
   });
 
   it('fails at once without a bridge (a desktop browser)', () => {
