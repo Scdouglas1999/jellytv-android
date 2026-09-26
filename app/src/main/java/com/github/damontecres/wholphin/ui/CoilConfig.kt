@@ -1,3 +1,6 @@
+// Modified for Tally (https://github.com/Scdouglas1999/Tally), a fork of Wholphin
+// (https://github.com/damontecres/Wholphin), from September 2026. Changes are marked TALLY: begin/end;
+// each change and its date is in the git history. See NOTICE.md.
 package com.github.damontecres.wholphin.ui
 
 import androidx.compose.runtime.Composable
@@ -92,6 +95,11 @@ fun CoilConfig(
             }.crossfade(false)
             .logger(if (debugLogging) DebugLogger() else null)
             .components {
+                // TALLY: begin
+                // Tally: game art at its drawn size and the device's time zone; failed loads tried again
+                io.github.scdouglas1999.tally.media.kit.TallyImageInterceptors
+                    .addTo(this)
+                // TALLY: end
                 add(
                     OkHttpNetworkFetcherFactory(
                         cacheStrategy = { WholphinCacheStrategy(CacheControlCacheStrategy()) },
