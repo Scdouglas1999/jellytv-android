@@ -5,7 +5,7 @@
  *     a handler returns true when it used the key;
  *  3. arrows and OK: the focus system; BACK: the router (previous page, then the app's root behavior).
  */
-import { useEffect, useRef } from 'preact/hooks';
+import { useLayoutEffect, useRef } from 'preact/hooks';
 import { navigate, navigateRelease } from '../focus/focus';
 import { mapKey, type Key } from './keys';
 import type { Platform } from './platform';
@@ -122,11 +122,16 @@ export function installKeyRouter(platform: Platform, onRootBack: () => void): vo
   );
 }
 
-/** Registers `handler` while `enabled` (newest registration first). */
+/**
+ * Registers `handler` while `enabled` (newest registration first). Registered as the component is committed (a layout
+ * effect), not after the next paint: a panel on screen owns its keys at once. With `useEffect`, a BACK within a frame
+ * of a panel opening went past it (the panel was drawn, its handler not there yet) to the router, which left the
+ * player (the webOS e2e's pointer click on AUDIO and BACK straight after, 3 of 3 on a busy machine).
+ */
 export function useKeyHandler(handler: KeyHandler, enabled = true): void {
   const ref = useRef(handler);
   ref.current = handler;
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!enabled) return undefined;
     const entry = { handler: ref };
     handlers.push(entry);
