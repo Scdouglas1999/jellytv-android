@@ -189,7 +189,9 @@ export function createAvPlayEngine(host: HTMLElement, events: EngineEvents): Pla
             if (!play) events.state('paused');
             resolve();
           };
-          if (!src.live && startMs > 0) {
+          // a growing (EVENT) playlist, such as a game's start over, opens at its newest segment unless told where:
+          // an HLS source that is not live is always put at its start position, 0 included
+          if (!src.live && (startMs > 0 || src.kind === 'hls')) {
             try {
               avplay.seekTo(startMs, begin, begin);
             } catch {

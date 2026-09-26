@@ -139,7 +139,9 @@ export function createWebosEngine(host: HTMLElement, events: EngineEvents, bundl
       video.addEventListener('error', done);
     });
     if (mine !== generation) return;
-    if (!src.live && startMs > 0 && hls === null) video.currentTime = startMs / 1000;
+    // a growing (EVENT) playlist, such as a game's start over, may open at its newest segment: an HLS source that is
+    // not live is always put at its start position, 0 included
+    if (!src.live && hls === null && (startMs > 0 || src.kind === 'hls')) video.currentTime = startMs / 1000;
     applyAudio();
     if (play) {
       await video.play().catch(() => undefined);

@@ -129,6 +129,15 @@ describe('AVPlay engine', () => {
     expect(calls).toEqual(['listener', 'open http://s/v.m3u8', 'rect 0,0,1920,1080', 'method PLAYER_DISPLAY_MODE_LETTER_BOX', 'prepare', 'seek 42000', 'play']);
   });
 
+  it('puts a growing playlist (a game\'s start over) at its first minute: a non-live HLS source seeks to 0 too', async () => {
+    const engine = createAvPlayEngine(new FakeElement() as unknown as HTMLElement, noEvents);
+    await engine.load({ url: 'http://s/JellyTV/Recordings/j/playlist.m3u8', kind: 'hls', live: false, startMs: 0 });
+    expect(calls.slice(-3)).toEqual(['prepare', 'seek 0', 'play']);
+    calls.length = 0;
+    await engine.load({ url: 'http://s/film.mkv', kind: 'file', live: false, startMs: 0 });
+    expect(calls.some((c) => c.startsWith('seek'))).toBe(false);
+  });
+
   it('never seeks a live stream and asks for a start buffer', async () => {
     const engine = createAvPlayEngine(new FakeElement() as unknown as HTMLElement, noEvents);
     await engine.load({ url: 'http://s/live.m3u8', kind: 'hls', live: true, startMs: 0 });

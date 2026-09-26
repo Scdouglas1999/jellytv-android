@@ -139,6 +139,15 @@ describe('webOS engine', () => {
     expect(e.states).toContain('playing');
   });
 
+  it('puts a growing playlist (a game\'s start over) at its first minute: a non-live HLS source starts at 0', async () => {
+    const engine = createWebosEngine(host, events(), '');
+    // LG's element opens an EVENT playlist at its newest segment
+    await loaded(engine.load({ url: 'http://s/JellyTV/Recordings/j/playlist.m3u8', kind: 'hls', live: false, startMs: 0 }), () => {
+      video.currentTime = 300;
+    });
+    expect(video.currentTime).toBe(0);
+  });
+
   it('switches a file’s audio in place through audioTracks and keeps the choice across a reopen', async () => {
     const engine = createWebosEngine(host, events(), '');
     await loaded(engine.load({ url: 'http://s/film.mkv', kind: 'file', live: false, startMs: 0 }), () => {
