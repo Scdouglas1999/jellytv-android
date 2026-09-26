@@ -250,6 +250,10 @@ class PlaybackViewModel
                     player.removeListener(it)
                 }
                 player.release()
+                // TALLY: begin
+                io.github.scdouglas1999.tally.playback.TallyVideoPlayback
+                    .onSessionReleasing(mediaSession)
+                // TALLY: end
                 mediaSession?.release()
             }
             jobs.forEach { it.cancel() }
@@ -312,6 +316,12 @@ class PlaybackViewModel
                     preferences.appPreferences.playbackPreferences,
                 )
             mediaSession = playerFactory.createMediaSession(sessionPlayer)
+            // TALLY: begin
+            mediaSession?.let {
+                io.github.scdouglas1999.tally.playback.TallyVideoPlayback
+                    .onSessionCreated(context, it)
+            }
+            // TALLY: end
         }
 
         /**

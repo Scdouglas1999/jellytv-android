@@ -16,6 +16,7 @@ import androidx.media3.session.MediaSessionService
 import com.github.damontecres.wholphin.data.model.AudioItem
 import io.github.scdouglas1999.tally.downloads.TallyDownloadPlayback
 import io.github.scdouglas1999.tally.ui.formfactor.TallyFormFactor
+import org.jellyfin.sdk.model.serializer.toUUIDOrNull
 import timber.log.Timber
 
 /**
@@ -23,13 +24,16 @@ import timber.log.Timber
  * singleton holding a Media3 [MediaSession] but not an Android service, so once the app leaves the screen Android
  * freezes it and the music stops. On a phone the session is handed to [TallyMusicPlaybackService], a Media3
  * [MediaSessionService]: it runs in the foreground while music plays, with the system media notification and the lock
- * screen controls. A TV keeps upstream's behavior exactly (nothing here runs there). Video is not part of this.
+ * screen controls. A TV keeps upstream's behavior exactly (nothing here runs there). Video has its own service
+ * ([TallyVideoPlaybackService]).
  * The queue's items get their album art as artwork ([SessionArtwork]), so the notification shows the cover the
  * now-playing screen shows.
  */
 object TallyMusicPlayback {
     @Volatile
     internal var session: MediaSession? = null
+
+    private val artwork = SessionArtwork()
 
     @Volatile
     internal var service: TallyMusicPlaybackService? = null
@@ -42,7 +46,7 @@ object TallyMusicPlayback {
         if (TallyFormFactor.of(context) != TallyFormFactor.PHONE) return
         session = mediaSession
         SessionArtwork.appContext = context.applicationContext
-        SessionArtwork.attach(mediaSession)
+        artwork.attach(mediaSession)
         val running = service
         if (running != null) {
             running.attach(mediaSession)
@@ -60,7 +64,7 @@ object TallyMusicPlayback {
     /** Upstream is about to release the session (music stopped): take it out of the service and stop the service. */
     fun onSessionStopping(mediaSession: MediaSession?) {
         if (session !== mediaSession && mediaSession != null) return
-        if (session != null) SessionArtwork.detach()
+        if (session != null) artwork.detach()
         session = null
         service?.detach()
     }
@@ -124,19 +128,19 @@ class TallyMusicPlaybackService : MediaSessionService() {
 }
 
 /**
- * Gives every item of the music queue its album art as [androidx.media3.common.MediaMetadata.artworkUri]: upstream's
- * items carry the cover only in their [AudioItem] tag (what the now-playing screen shows), so the media session, and
- * with it the notification and the lock screen, had no picture. Items are completed as they are queued; replacing an
- * item with the same stream and a richer metadata does not interrupt it.
+ * Gives every item of a media session's queue the picture its notification and the lock screen show, as
+ * [androidx.media3.common.MediaMetadata.artworkUri]:
+ * - a downloaded item: the download's own artwork on the device (`file://`), online too, so it shows offline;
+ * - otherwise music: its album art (upstream's items carry the cover only in their [AudioItem] tag, what the
+ *   now-playing screen shows); a video already has the server's picture from upstream.
+ * Items are completed as they are queued; replacing an item with the same stream and a richer metadata does not
+ * interrupt it. One instance per session (music, video).
  */
 @OptIn(UnstableApi::class)
-internal object SessionArtwork : Player.Listener {
+internal class SessionArtwork : Player.Listener {
     private val main = Handler(Looper.getMainLooper())
     private var player: Player? = null
     private var filling = false
-
-    /** For the covers of downloaded tracks (offline, the server's cover cannot load). */
-    @Volatile var appContext: Context? = null
 
     /** Called from any thread; the session's player is used on the main thread, the player's own (upstream's). */
     fun attach(session: MediaSession) {
@@ -145,7 +149,7 @@ internal object SessionArtwork : Player.Listener {
                 try {
                     session.player
                 } catch (e: IllegalStateException) {
-                    Timber.w(e, "Music session gone before its artwork was set up")
+                    Timber.w(e, "Session gone before its artwork was set up")
                     return@post
                 }
             if (this.player === player) return@post
@@ -183,25 +187,37 @@ internal object SessionArtwork : Player.Listener {
         try {
             missing.forEach { (index, item) -> player.replaceMediaItem(index, item) }
         } catch (e: IllegalStateException) {
-            Timber.w(e, "Could not add the music artwork")
+            Timber.w(e, "Could not add the session artwork")
         } finally {
             filling = false
         }
     }
 
-    /** [item] with its album art as artwork, or null when it already has one or has no album art. */
+    /** [item] with its artwork, or null when it already has the right one or there is none. */
     private fun withArtwork(item: MediaItem): MediaItem? {
-        if (item.mediaMetadata.artworkUri != null || item.mediaMetadata.artworkData != null) return null
-        val audio = item.localConfiguration?.tag as? AudioItem ?: return null
-        val local = appContext?.let { TallyDownloadPlayback.localArtwork(it, audio.id) }
-        val imageUrl = local ?: audio.imageUrl ?: return null
+        val audio = item.localConfiguration?.tag as? AudioItem
+        val itemId = audio?.id ?: item.mediaId.toUUIDOrNull()
+        val local = itemId?.let { id -> appContext?.let { TallyDownloadPlayback.localArtwork(it, id) } }
+        val current = item.mediaMetadata.artworkUri
+        val artwork =
+            when {
+                local != null -> local
+                current != null || item.mediaMetadata.artworkData != null -> null
+                else -> audio?.imageUrl
+            } ?: return null
+        if (artwork == current?.toString()) return null
         return item
             .buildUpon()
             .setMediaMetadata(
                 item.mediaMetadata
                     .buildUpon()
-                    .setArtworkUri(imageUrl.toUri())
+                    .setArtworkUri(artwork.toUri())
                     .build(),
             ).build()
+    }
+
+    companion object {
+        /** For the artwork of downloads (offline, the server's picture cannot load). */
+        @Volatile var appContext: Context? = null
     }
 }
