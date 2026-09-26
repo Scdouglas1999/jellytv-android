@@ -305,6 +305,24 @@ presses Download & Update. How releases are built is in [`tally/README.md`](../t
 `/JellyTV/Get`, `/JellyTV/app` and `/JellyTV/Get/qr.svg` are anonymous on purpose (they are used before anyone
 signs in) and expose nothing but the server's address.
 
+### Samsung and LG TVs (Tally TV)
+
+Samsung (2020+) and LG (webOS 5+, 2020+) TVs run Tally TV, a web app the plugin serves at `/JellyTV/TV/` (see
+[`tv-web/`](../tv-web/)); a small shell installed once on the TV loads it from this server, so a plugin update updates
+every TV. The installers are *Tally for Samsung* and *Tally for LG* (release assets; guides in
+`tv-web/INSTALL-SAMSUNG.md` and `tv-web/INSTALL-LG.md`).
+
+**LG Developer Mode, kept on.** LG TVs install Tally through LG's Developer Mode, whose session runs out (LG then
+turns Developer Mode off at the next restart and removes the app, and an expired session cannot be extended). Tally
+for LG stamps the TV's session token into the app; once someone signs in, the TV sends it here
+(`POST /JellyTV/Client/v1/lg/devmode` with `{"token": "…", "model": "…"}`, authenticated, answered 204; a token is
+letters and digits only, 400 otherwise). The plugin keeps it in its data folder (`lg-devmode.json`, one entry per
+TV, at most 20), resets the session once a day with LG's `ResetDevModeSession` (then reads the time left with
+`CheckDevModeSession`), tries a failed renewal again after an hour, logs each result, and forgets a TV that has
+failed for 14 days. Settings → **Tally on a TV** shows "LG Developer Mode kept on for 1 TV · renewed …" (and any
+failure). Tokens are never returned by any endpoint; `/JellyTV/Status` carries only the count, the last renewal and
+the last error.
+
 ## Building
 
 `./build.sh` tests and builds the plugin for each Jellyfin line and writes the zips the installers and the plugin

@@ -6,11 +6,19 @@ import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
 import android.os.Handler
 import android.os.Looper
+import android.view.ViewTreeObserver
+import android.view.Window
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -42,21 +50,50 @@ fun PhonePlayerWindow() {
 /**
  * Inside a dialog window shown over the phone player (a [io.github.scdouglas1999.tally.ui.phone.PhoneSheet], a menu):
  * while the player's window is held ([PhonePlayerWindow]), the status and navigation bars stay hidden in the dialog's
- * window too. A new window that takes the focus brings the bars back otherwise, until it closes. Nothing anywhere
- * else (the player not shown, a TV).
+ * window too. A new window that takes the focus brings the bars back otherwise, until it closes: they are hidden when
+ * the dialog appears, again whenever its window gains the focus (some phones show them only then), and in the player's
+ * window when the dialog closes. Nothing anywhere else (the player not shown, a TV).
  */
 @Composable
 fun KeepPlayerBarsHidden() {
     val view = LocalView.current
-    SideEffect {
-        if (!PlayerWindowHold.held) return@SideEffect
-        val window = (view.parent as? DialogWindowProvider)?.window ?: return@SideEffect
-        WindowCompat.getInsetsController(window, window.decorView).apply {
-            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            hide(WindowInsetsCompat.Type.systemBars())
+    DisposableEffect(view) {
+        val window = (view.parent as? DialogWindowProvider)?.window ?: return@DisposableEffect onDispose { }
+        val decor = window.decorView
+        val hide = Runnable { if (PlayerWindowHold.held) hideBars(window) }
+        hide.run()
+        // once the window is laid out and focused, in case showing it brought the bars back
+        decor.post(hide)
+        val focus = ViewTreeObserver.OnWindowFocusChangeListener { hasFocus -> if (hasFocus) hide.run() }
+        decor.viewTreeObserver.addOnWindowFocusChangeListener(focus)
+        onDispose {
+            decor.removeCallbacks(hide)
+            decor.viewTreeObserver.takeIf { it.isAlive }?.removeOnWindowFocusChangeListener(focus)
+            // back in the player's window: bars the dialog brought back go away with it
+            val activity = view.context.findActivity()
+            if (activity != null && PlayerWindowHold.held) hideBars(activity.window)
         }
     }
 }
+
+private fun hideBars(window: Window) {
+    WindowCompat.getInsetsController(window, window.decorView).apply {
+        systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        hide(WindowInsetsCompat.Type.systemBars())
+    }
+}
+
+/**
+ * The status bar's height, also while the player hides it: the strip at the top where a swipe brings the bars back
+ * and a tap may not reach the app. The player's top bar starts under it ([playerTopBarInset]).
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun playerStatusStrip(): Dp = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
+
+/** Top padding of [playerStatusStrip]: a landscape player's top bar (back, title, buttons) sits clear of the strip. */
+@Composable
+fun Modifier.playerTopBarInset(): Modifier = padding(top = playerStatusStrip())
 
 private object PlayerWindowHold {
     /** How long the window stays as it is after the last holder leaves, in case another takes it straight away. */
@@ -79,10 +116,7 @@ private object PlayerWindowHold {
         }
         holders++
         activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-        insetsController(activity).apply {
-            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            hide(WindowInsetsCompat.Type.systemBars())
-        }
+        hideBars(activity.window)
     }
 
     fun release(activity: Activity) {

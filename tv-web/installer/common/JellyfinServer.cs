@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace Tally.SamsungInstaller.Tv;
+namespace Tally.Installer;
 
 public sealed record ServerCheck(string Address, string Name, string Version, bool HasTvApp);
 

@@ -2,7 +2,7 @@ import type { EngineEvents, EngineName, PlayerEngine, Source } from './engine';
 
 declare const __HLS_FILE__: string;
 
-interface HlsInstance {
+export interface HlsInstance {
   loadSource(url: string): void;
   attachMedia(video: HTMLVideoElement): void;
   destroy(): void;
@@ -24,7 +24,7 @@ let hlsLoading: Promise<HlsStatic> | null = null;
  * hls.js (Apache-2.0) is not part of the app bundle: it is a separate file next to it, loaded only by browsers
  * without native HLS (TVs never load it). See ARCHITECTURE.md, licenses.
  */
-function loadHls(base: string): Promise<HlsStatic> {
+export function loadHls(base: string): Promise<HlsStatic> {
   const w = window as unknown as { Hls?: HlsStatic };
   if (w.Hls !== undefined) return Promise.resolve(w.Hls);
   if (hlsLoading !== null) return hlsLoading;

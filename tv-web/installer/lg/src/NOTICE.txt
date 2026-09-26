@@ -1,0 +1,30 @@
+Tally for LG
+Copyright (C) Tally contributors. GPL-2.0-only (see the Tally repository's LICENSE).
+
+It carries:
+
+- The Tally TV shell (tv-web/shell): GPL-2.0-only, with IBM Plex fonts (SIL Open Font License 1.1, in the package
+  as fonts/OFL.txt).
+- The .NET runtime and libraries: MIT License, Copyright (c) .NET Foundation and Contributors.
+- SSH.NET 2026.0.0 (https://github.com/sshnet/SSH.NET): MIT License, Copyright (c) Renci and contributors.
+- BouncyCastle.Cryptography 2.7.0 (https://www.bouncycastle.org/): MIT License, Copyright (c) 2000-2025 The Legion
+  of the Bouncy Castle Inc.
+- Microsoft.Extensions.Logging.Abstractions: MIT License, Copyright (c) .NET Foundation and Contributors.
+
+No LG software is included. The package format, the Developer Mode key server, SSH login and the TV services it
+calls follow LG's webOS TV CLI (@webos-tools/cli, Apache-2.0), read as a specification.
+
+MIT License
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the Software without restriction, including without limitation the
+rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit
+persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the
+Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

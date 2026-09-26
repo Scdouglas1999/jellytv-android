@@ -32,6 +32,9 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Tally.SamsungInstaller.Tests" />
+    <!-- the parts Tally for LG shares: console, server step, network scan, config.js, program frame -->
+    <ProjectReference Include="../common/Tally.Installer.Common.csproj" />
+    <Using Include="Tally.Installer" />
   </ItemGroup>
 
   <!-- The TV shell, straight from tv-web/shell (the same files scripts/package-tizen.sh packs) -->

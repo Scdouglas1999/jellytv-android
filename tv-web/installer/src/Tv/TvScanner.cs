@@ -1,6 +1,4 @@
 using System.Net;
-using System.Net.NetworkInformation;
-using System.Net.Sockets;
 using System.Text.Json;
 using Tally.SamsungInstaller.Sdb;
 
@@ -59,84 +57,17 @@ public sealed class TvScanner(HttpClient http)
     public TimeSpan InfoTimeout { get; init; } = TimeSpan.FromSeconds(2);
 
     /// <summary>This PC's IPv4 networks: (address, the /24 to scan).</summary>
-    public static IReadOnlyList<(IPAddress Local, IReadOnlyList<IPAddress> Hosts)> LocalNetworks()
-    {
-        var result = new List<(IPAddress, IReadOnlyList<IPAddress>)>();
-        foreach (var nic in NetworkInterface.GetAllNetworkInterfaces())
-        {
-            if (nic.OperationalStatus != OperationalStatus.Up || nic.NetworkInterfaceType == NetworkInterfaceType.Loopback)
-            {
-                continue;
-            }
+    public static IReadOnlyList<(IPAddress Local, IReadOnlyList<IPAddress> Hosts)> LocalNetworks() => NetworkScan.LocalNetworks();
 
-            foreach (var unicast in nic.GetIPProperties().UnicastAddresses)
-            {
-                var ip = unicast.Address;
-                if (ip.AddressFamily != AddressFamily.InterNetwork || IPAddress.IsLoopback(ip) || IsLinkLocal(ip)
-                    || !IsPrivate(ip) || result.Any(r => r.Item1.Equals(ip)))
-                {
-                    continue;
-                }
-
-                result.Add((ip, Slash24(ip).Where(h => !h.Equals(ip)).ToList()));
-            }
-        }
-
-        return result;
-    }
-
-    public static IEnumerable<IPAddress> Slash24(IPAddress ip)
-    {
-        var b = ip.GetAddressBytes();
-        for (var last = 1; last < 255; last++)
-        {
-            yield return new IPAddress([b[0], b[1], b[2], (byte)last]);
-        }
-    }
-
-    private static bool IsLinkLocal(IPAddress ip) => ip.GetAddressBytes() is [169, 254, ..];
+    public static IEnumerable<IPAddress> Slash24(IPAddress ip) => NetworkScan.Slash24(ip);
 
     /// <summary>Home networks (10/8, 172.16/12, 192.168/16, 100.64/10): a TV is never on a public address.</summary>
-    public static bool IsPrivate(IPAddress ip) => ip.GetAddressBytes() switch
-    {
-        [10, ..] => true,
-        [172, var b, ..] when b is >= 16 and <= 31 => true,
-        [192, 168, ..] => true,
-        [100, var b, ..] when b is >= 64 and <= 127 => true,
-        _ => false,
-    };
+    public static bool IsPrivate(IPAddress ip) => NetworkScan.IsPrivate(ip);
 
     /// <summary>Scans the given addresses; returns TVs and open sdb ports, in address order.</summary>
-    public async Task<IReadOnlyList<TvFound>> ScanAsync(IEnumerable<IPAddress> hosts, CancellationToken ct,
-        IProgress<int>? progress = null)
-    {
-        var list = hosts.ToList();
-        var found = new List<TvFound>();
-        var done = 0;
-        using var gate = new SemaphoreSlim(96);
-        var tasks = list.Select(async ip =>
-        {
-            await gate.WaitAsync(ct).ConfigureAwait(false);
-            try
-            {
-                var tv = await ProbeAsync(ip, ct).ConfigureAwait(false);
-                if (tv is not null)
-                {
-                    lock (found)
-                    {
-                        found.Add(tv);
-                    }
-                }
-            }
-            finally
-            {
-                gate.Release();
-                progress?.Report(Interlocked.Increment(ref done));
-            }
-        });
-        await Task.WhenAll(tasks).ConfigureAwait(false);
-        return found.OrderBy(t => t.Address.GetAddressBytes(), ByteOrder.Instance).ToList();
-    }
+    public Task<IReadOnlyList<TvFound>> ScanAsync(IEnumerable<IPAddress> hosts, CancellationToken ct,
+        IProgress<int>? progress = null) =>
+        NetworkScan.ScanAsync(hosts, ProbeAsync, tv => tv.Address, ct, progress);
 
     /// <summary>One address: Samsung's TV information and the sdb port. Null when neither answers.</summary>
     public async Task<TvFound?> ProbeAsync(IPAddress ip, CancellationToken ct)
@@ -155,21 +86,8 @@ public sealed class TvScanner(HttpClient http)
             : device with { SdbPortOpen = sdb.Result };
     }
 
-    private async Task<bool> PortOpenAsync(IPAddress ip, int port, CancellationToken ct)
-    {
-        using var limit = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        limit.CancelAfter(ConnectTimeout);
-        using var tcp = new TcpClient(ip.AddressFamily);
-        try
-        {
-            await tcp.ConnectAsync(ip, port, limit.Token).ConfigureAwait(false);
-            return true;
-        }
-        catch (Exception ex) when (ex is SocketException or OperationCanceledException && !ct.IsCancellationRequested)
-        {
-            return false;
-        }
-    }
+    private Task<bool> PortOpenAsync(IPAddress ip, int port, CancellationToken ct) =>
+        NetworkScan.PortOpenAsync(ip, port, ConnectTimeout, ct);
 
     private async Task<TvFound?> InfoAsync(IPAddress ip, CancellationToken ct)
     {
@@ -223,36 +141,5 @@ public sealed class TvScanner(HttpClient http)
     }
 
     /// <summary>The address this PC uses to reach <paramref name="tv"/> (what Developer Mode's Host PC IP must be).</summary>
-    public static IPAddress? LocalAddressFor(IPAddress tv)
-    {
-        try
-        {
-            using var socket = new Socket(tv.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
-            socket.Connect(tv, 9); // UDP connect sends nothing; it only picks the route
-            return (socket.LocalEndPoint as IPEndPoint)?.Address;
-        }
-        catch (SocketException)
-        {
-            return null;
-        }
-    }
-
-    private sealed class ByteOrder : IComparer<byte[]>
-    {
-        public static readonly ByteOrder Instance = new();
-
-        public int Compare(byte[]? x, byte[]? y)
-        {
-            for (var i = 0; i < Math.Min(x!.Length, y!.Length); i++)
-            {
-                var c = x[i].CompareTo(y[i]);
-                if (c != 0)
-                {
-                    return c;
-                }
-            }
-
-            return x.Length.CompareTo(y.Length);
-        }
-    }
+    public static IPAddress? LocalAddressFor(IPAddress tv) => NetworkScan.LocalAddressFor(tv);
 }

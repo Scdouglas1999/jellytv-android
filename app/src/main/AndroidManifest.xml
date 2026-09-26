@@ -113,6 +113,17 @@
         </service>
         <!-- TALLY: end -->
 
+        <!-- TALLY: begin (the video player's media notification, used on phones only) -->
+        <service
+            android:name="io.github.scdouglas1999.tally.playback.TallyVideoPlaybackService"
+            android:exported="true"
+            android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+            </intent-filter>
+        </service>
+        <!-- TALLY: end -->
+
         <!-- TALLY: begin (downloads: Media3 download service and its job scheduler) -->
         <service
             android:name="io.github.scdouglas1999.tally.downloads.TallyDownloadService"

@@ -147,6 +147,15 @@ fun TallyUserPicker(
 
     when (val current = step) {
         UserStep.List -> {
+            // Opened from the app: BACK returns to it (this server's list) or to the server list (another server's).
+            val returnTo = TallySetupReturn.returnSession(viewModel.serverRepository)
+            BackHandler(enabled = returnTo != null) {
+                returnTo?.let {
+                    viewModel.setupNavigationManager.navigateTo(
+                        if (it.server.id == server.id) SetupDestination.AppContent(it) else SetupDestination.ServerList,
+                    )
+                }
+            }
             TallySetupFrame(
                 kicker = stringResource(R.string.tally_signin_kicker_user),
                 subtitle = if (server.name.isNullOrBlank()) server.url else "${server.name} · ${server.url}",

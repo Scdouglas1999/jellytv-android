@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -20,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Text
 import com.github.damontecres.wholphin.R
@@ -40,7 +42,8 @@ import io.github.scdouglas1999.tally.ui.theme.TallyColors
 
 /**
  * The games board on a phone: the TV board's rows in its order, stacked: each row's header as on the TV
- * (`MLB / LIVE 3`) over its games as full-width [PhoneGameCard]s (two across on a tablet). A tap or a long-press on a game opens its game sheet
+ * (`MLB / LIVE 3`) over its games as full-width [PhoneGameCard]s (on a tablet as many across as fit, each at most
+ * [PhoneDimens.gameCardMaxWidth]). A tap or a long-press on a game opens its game sheet
  * (the TV's focused-game panel and game menu in one). The TV's loading, failed, filtered and empty states, and the
  * one-line notice naming the leagues whose feeds failed.
  */
@@ -83,7 +86,9 @@ internal fun PhoneGamesBoard(
 
         else -> {
             val bottom = LocalPhoneContentPadding.current.calculateBottomPadding()
-            val columns = if (LocalConfiguration.current.screenWidthDp.dp >= PhoneDimens.twoColumnMinWidth) 2 else 1
+            val screenWidth = LocalConfiguration.current.screenWidthDp.dp
+            val columns = phoneGameColumns(screenWidth)
+            val cardWidth = phoneGameCardWidth(screenWidth, columns)
             LazyColumn(
                 state = rememberLazyListState(),
                 contentPadding = PaddingValues(top = 12.dp, bottom = bottom + PhoneDimens.rowGap),
@@ -121,7 +126,7 @@ internal fun PhoneGamesBoard(
                         )
                         Spacer(Modifier.height(8.dp))
                     }
-                    // a tablet: two games side by side, so a card never stretches across the screen
+                    // a tablet: games side by side, each at most gameCardMaxWidth, so a card never stretches
                     items(row.games.chunked(columns), key = { row.key + "|" + it.first().id }) { pair ->
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(PhoneDimens.cardGap),
@@ -140,10 +145,9 @@ internal fun PhoneGamesBoard(
                                     followed = game.isFollowed(state.favoriteTeams),
                                     onClick = { sheetGameId = game.id },
                                     onLongClick = { sheetGameId = game.id },
-                                    modifier = Modifier.weight(1f),
+                                    modifier = if (cardWidth != null) Modifier.width(cardWidth) else Modifier.weight(1f),
                                 )
                             }
-                            repeat(columns - pair.size) { Spacer(Modifier.weight(1f)) }
                         }
                     }
                 }
@@ -168,6 +172,23 @@ internal fun PhoneGamesBoard(
             onDismiss = { sheetGameId = null },
         )
     }
+}
+
+/** One game across a phone; on a tablet as many columns as fit cards at least [PhoneDimens.gameCardWidth] wide. */
+internal fun phoneGameColumns(screenWidth: Dp): Int {
+    if (screenWidth < PhoneDimens.twoColumnMinWidth) return 1
+    val available = screenWidth - PhoneDimens.margin * 2
+    return ((available + PhoneDimens.cardGap) / (PhoneDimens.gameCardWidth + PhoneDimens.cardGap)).toInt().coerceAtLeast(2)
+}
+
+/** A tablet's card width for [columns] across (at most [PhoneDimens.gameCardMaxWidth]); null on a phone (full width). */
+internal fun phoneGameCardWidth(
+    screenWidth: Dp,
+    columns: Int,
+): Dp? {
+    if (columns < 2) return null
+    val available = screenWidth - PhoneDimens.margin * 2
+    return minOf((available - PhoneDimens.cardGap * (columns - 1)) / columns, PhoneDimens.gameCardMaxWidth)
 }
 
 @Composable

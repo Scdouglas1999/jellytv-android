@@ -24,6 +24,12 @@ export interface TallyShell {
   exit(): void;
   /** The bundle has drawn its first screen: the shell removes its loading screen. */
   started(): void;
+  /**
+   * LG only: the TV's Developer Mode session token that Tally for LG stamped into config.js (null or absent
+   * elsewhere, and in shells installed by LG's own tools). The bundle hands it to the Tally plugin, which renews the
+   * session so LG does not remove the app when Developer Mode's 50 hours run out.
+   */
+  readonly devModeToken?: string | null;
 }
 
 declare global {
@@ -38,7 +44,7 @@ export const MIN_SHELL_VERSION = 1;
 function detectPlatform(): ShellPlatform {
   const w = window as unknown as Record<string, unknown>;
   if (w.tizen !== undefined) return 'tizen';
-  if (w.webOS !== undefined || w.PalmSystem !== undefined) return 'webos';
+  if (w.webOS !== undefined || w.webOSSystem !== undefined || w.PalmSystem !== undefined) return 'webos';
   return 'browser';
 }
 
