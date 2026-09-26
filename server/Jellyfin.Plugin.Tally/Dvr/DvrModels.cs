@@ -247,6 +247,10 @@ public sealed class DvrState
     /// <summary>When the DVR created the recordings library by itself (the first finished recording without one). Set
     /// once and never cleared: a library the owner removes afterwards is not created again.</summary>
     [JsonPropertyName("libraryAutoCreatedAt")] public DateTimeOffset? LibraryAutoCreatedAt { get; set; }
+
+    /// <summary>How the finished recordings' art was drawn (<see cref="DvrService.RecordingArtVersion"/>); older art is
+    /// drawn again once.</summary>
+    [JsonPropertyName("recordingArtVersion")] public int RecordingArtVersion { get; set; }
 }
 
 /// <summary>A game's recording as the board shows it.</summary>

@@ -129,6 +129,28 @@ public class ArtRequestTests
         Assert.NotEqual(ny, la);     // SUN 7:10 PM vs SUN 4:10 PM
         Assert.Equal(la, la2);
     }
+
+    [Fact]
+    public void A_Recording_Thumb_Shows_The_Day_And_No_Time_Of_Day()
+    {
+        // the library item's picture: every client shows it as it is, whatever its zone, so no clock time on it
+        var game = new GameInfo
+        {
+            Id = "402", Sport = "baseball", League = "MLB", State = "pre",
+            Start = new DateTimeOffset(2026, 9, 26, 18, 20, 0, TimeSpan.Zero),
+            Home = new GameTeam { Abbr = "LKH", ShortName = "Herons" },
+            Away = new GameTeam { Abbr = "ROT", ShortName = "Otters" }
+        };
+        var ny = CardArtService.RenderRecordingThumb(game, null, null, ArtRequest.Zone("America/New_York"));
+        var la = CardArtService.RenderRecordingThumb(game, null, null, ArtRequest.Zone("America/Los_Angeles"));
+        Assert.Equal(ny, la);   // 2:20 PM and 11:20 AM: the same picture, SAT SEP 26
+        Assert.Equal("SAT SEP 26", CardArtService.RecordingDay(game, ArtRequest.Zone("America/New_York")));
+        Assert.NotEqual(CardArtService.RenderMatchup(game, null, null, ArtRequest.Zone("America/New_York"), game.Start), ny);
+
+        using var bmp = SKBitmap.Decode(ny);
+        Assert.Equal(CardArtService.Width, bmp.Width);
+        Assert.Equal(CardArtService.Height, bmp.Height);
+    }
 }
 
 /// <summary>Contract 3 of 2.2: <c>libraryState</c> and the recordings library the DVR creates once.</summary>

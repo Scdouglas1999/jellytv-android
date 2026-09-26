@@ -201,7 +201,8 @@ time) and follows the live ladder's continuous playlist through source switches.
   cancel (what was recorded is kept).
 - **Finish**: Jellyfin's own ffmpeg remuxes the segments (stream copy, no transcode) into
   `<recordings>/<League>/<Away> at <Home> - <yyyy-MM-dd>.mp4`, with an NFO (title "Away at Home", date, league,
-  teams, never the score) and poster, backdrop and thumb art drawn from the game, then the plugin adds it to the library
+  teams, never the score) and poster, backdrop and thumb art drawn from the game (the date, never a time of day: every
+  Jellyfin client shows the item's pictures as they are, whatever its time zone), then the plugin adds it to the library
   that covers the recordings folder (it scans just that folder, first adding the library folder itself if Jellyfin
   skipped it for being empty), so the item appears within seconds and the job (and the game on the board) carries its
   `itemId`. A file Jellyfin picks up later (a library created afterwards, a scan) is noted on the job as soon as it is

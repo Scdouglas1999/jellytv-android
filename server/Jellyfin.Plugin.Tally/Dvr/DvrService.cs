@@ -37,6 +37,10 @@ namespace Jellyfin.Plugin.Tally.Dvr;
 public sealed class DvrService : IHostedService, IDisposable
 {
     public const string LibraryName = "Sports Recordings";
+
+    /// <summary>2: a recording's thumb shows the day instead of the start time (in the server's zone, which the item's
+    /// image showed to every viewer).</summary>
+    public const int RecordingArtVersion = 2;
     private const int LookAheadDays = 7;
     private static readonly TimeSpan SwitchChannelAfter = TimeSpan.FromSeconds(60);
 
@@ -172,6 +176,7 @@ public sealed class DvrService : IHostedService, IDisposable
     private async Task LoopAsync(CancellationToken ct)
     {
         await ResumeAsync(ct).ConfigureAwait(false);
+        _ = Task.Run(() => RedrawRecordingArtAsync(ct), CancellationToken.None);
         while (!ct.IsCancellationRequested)
         {
             var busy = false;
@@ -860,6 +865,80 @@ public sealed class DvrService : IHostedService, IDisposable
         }
 
         return null;
+    }
+
+    /// <summary>Recordings finished before the current art (<see cref="RecordingArtVersion"/>) get their thumb drawn
+    /// again, once, and Jellyfin is told the item's image changed. A thumb whose logos cannot be fetched now is left
+    /// for the next start.</summary>
+    private async Task RedrawRecordingArtAsync(CancellationToken ct)
+    {
+        List<RecordingJob> done;
+        lock (_gate)
+        {
+            if (_state.RecordingArtVersion >= RecordingArtVersion)
+            {
+                return;
+            }
+
+            done = _state.Jobs.Where(j => j.State == JobState.Done && !string.IsNullOrEmpty(j.FilePath)).ToList();
+        }
+
+        var zone = TimeZoneInfo.Local;
+        var redrawn = 0;
+        var left = 0;
+        foreach (var job in done)
+        {
+            try
+            {
+                var file = job.FilePath!;
+                var thumb = Path.Combine(Path.GetDirectoryName(file)!, Path.GetFileNameWithoutExtension(file)) + "-thumb.png";
+                if (!File.Exists(thumb))
+                {
+                    continue;
+                }
+
+                var png = await _cardArt.RedrawRecordingThumbAsync(job.Game.ToArtGame(), zone, ct).ConfigureAwait(false);
+                if (png == null)
+                {
+                    left++;
+                    continue;
+                }
+
+                await File.WriteAllBytesAsync(thumb, png, ct).ConfigureAwait(false);
+                redrawn++;
+                if (ItemIdFor(job) is { } id && Guid.TryParse(id, out var guid) && _library.GetItemById(guid) is { } item)
+                {
+                    // the new file's date and size, so Jellyfin's resized copies of the old picture are not served
+                    await _library.UpdateImagesAsync(item, true).ConfigureAwait(false);
+                }
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                return;
+            }
+            catch (Exception ex)
+            {
+                left++;
+                _logger.LogWarning("JellyTV DVR: {Title}: could not redraw the recording's thumb: {Message}", job.Game.Title, ex.Message);
+            }
+        }
+
+        if (redrawn > 0 || left > 0)
+        {
+            _logger.LogInformation("JellyTV DVR: redrew {Count} recording thumbs with the day in place of the start time{Left}",
+                redrawn, left > 0 ? $"; {left} left for the next start" : string.Empty);
+        }
+
+        if (left == 0)
+        {
+            lock (_gate)
+            {
+                _state.RecordingArtVersion = RecordingArtVersion;
+                _dirty = true;
+            }
+
+            Save(force: true);
+        }
     }
 
     private async Task WriteMetadataAsync(RecordingJob job, string basePath, TimeZoneInfo zone, CancellationToken ct)
