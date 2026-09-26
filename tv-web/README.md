@@ -105,11 +105,24 @@ ARCHITECTURE.md, Packaging.
 
 ### LG (webOS 5 and newer)
 
+**For people installing Tally on their own TV: [INSTALL-LG.md](INSTALL-LG.md).** It uses *Tally for LG*
+(`Tally-LG-Installer-windows.exe`, `-macos-arm64`, `-macos-x64`, `-linux` on the release page), which finds the TV,
+unlocks the key of its Developer Mode with the passphrase the Developer Mode app shows, writes the package itself
+and installs it over SSH, without LG's tools, and stamps the Developer Mode session into Tally so the server keeps
+it on. Its source and tests are in [`installer/lg/`](installer/lg/) (`installer/build.sh lg` builds all four;
+`dotnet test installer/lg/tests` runs its tests; ARCHITECTURE.md §11 describes it). For development it takes
+`--bundle http://<this-pc>:4173/`, `--passphrase`, `--package` and, for LG's emulator, `--tv 127.0.0.1 --ssh-port
+6622 --user developer --key <webos_emul>`. `installer/lg/tests/fake-webos-tv.py` is a TV-like endpoint for trying it
+without a TV.
+
+From a development machine with LG's CLI:
+
 1. On the TV: install **Developer Mode** from the LG Content Store, sign in with an LG developer account, switch
    **Dev Mode Status** and **Key Server** on.
 2. On the PC: `ares-setup-device` (add the TV's IP, passphrase from the Developer Mode app), then
    `ares-install -d <tv> dist/io.github.scdouglas1999.tally_<ver>_all.ipk` and `ares-launch -d <tv> io.github.scdouglas1999.tally`.
-3. Developer Mode lasts 50 hours unless extended in the Developer Mode app.
+3. A package from `scripts/package-webos.sh` carries no Developer Mode session: extend it in the Developer Mode app
+   before it runs out (Tally for LG's packages are kept on by the server).
 
 ## Tools
 
@@ -127,6 +140,10 @@ Installed without root under `~/tools/` on the development machine:
   Tally in it (web inspector over `sdb shell 0 debug`, keys through the window), is in ARCHITECTURE.md, Testing.
 - **webOS CLI**: `npm install --prefix ~/tools/webos-cli @webos-tools/cli@3.2.6` (commands in
   `~/tools/webos-cli/node_modules/.bin`).
+- **webOS TV Simulator**: LG's Linux AppImage (`webOS_TV_6.0_Simulator_1.4.1`, Electron with Chromium 79, from
+  webostv.developer.lge.com/develop/tools/simulator-installation; no login, a license click-through), extracted
+  with `--appimage-extract` under `~/tools/webos-simulator/`; run as `<AppRun> <app folder> '{}'` on an Xvfb
+  display.
 
 ## Dependencies
 

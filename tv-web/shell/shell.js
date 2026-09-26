@@ -76,7 +76,13 @@
   function exitApp() {
     try {
       if (platform === 'tizen' && window.tizen) { window.tizen.application.getCurrentApplication().exit(); return; }
-      if (platform === 'webos') { window.close(); return; }
+      if (platform === 'webos') {
+        // LG's exit: webOS 6+ asks "exit the app?", webOS 5 goes to Home (developer guide, back-button)
+        var system = window.webOSSystem || window.PalmSystem;
+        if (system && system.platformBack) { system.platformBack(); return; }
+        window.close();
+        return;
+      }
     } catch (e) { /* fall through */ }
   }
 
@@ -185,6 +191,8 @@
       },
       reload: function () { window.location.reload(); },
       exit: exitApp,
+      // LG: the TV's Developer Mode session, stamped in by Tally for LG (the Tally plugin keeps it renewed)
+      devModeToken: config.devModeToken || null,
       started: function () {
         keyHandler = null;
         $('shell').className = 'gone';
@@ -227,6 +235,11 @@
   }
 
   window.addEventListener('keydown', function (e) { if (keyHandler) keyHandler(e); });
+  // webOS: launching Tally while it runs in the background relaunches it; bring the running app to the front
+  document.addEventListener('webOSRelaunch', function () {
+    var system = window.webOSSystem || window.PalmSystem;
+    try { if (system && system.activate) system.activate(); } catch (e) { /* nothing to do */ }
+  });
   window.addEventListener('resize', fit);
   fit();
   // development: ?bundle=<url of a bundle folder> loads the bundle from elsewhere (a dev machine) and is remembered

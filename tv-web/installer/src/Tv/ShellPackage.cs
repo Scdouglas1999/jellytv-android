@@ -50,42 +50,8 @@ public static class ShellPackage
     }
 
     /// <summary>config.js as package-tizen.sh writes it (JSON.stringify(…, null, 2)).</summary>
-    public static byte[] ConfigJs(string server, string bundle = "")
-    {
-        var json = new StringBuilder();
-        json.Append("{\n  \"platform\": \"tizen\",\n  \"server\": ").Append(JsonString(server))
-            .Append(",\n  \"bundle\": ").Append(JsonString(bundle)).Append("\n}");
-        return Encoding.UTF8.GetBytes("window.TALLY_SHELL_CONFIG = " + json + ";\n");
-    }
-
-    private static string JsonString(string value)
-    {
-        var sb = new StringBuilder("\"");
-        foreach (var c in value)
-        {
-            switch (c)
-            {
-                case '"': sb.Append("\\\""); break;
-                case '\\': sb.Append("\\\\"); break;
-                case '\n': sb.Append("\\n"); break;
-                case '\r': sb.Append("\\r"); break;
-                case '\t': sb.Append("\\t"); break;
-                default:
-                    if (c < 0x20 || c == (char)0x2028 || c == (char)0x2029)
-                    {
-                        sb.Append("\\u").Append(((int)c).ToString("x4", System.Globalization.CultureInfo.InvariantCulture));
-                    }
-                    else
-                    {
-                        sb.Append(c);
-                    }
-
-                    break;
-            }
-        }
-
-        return sb.Append('"').ToString();
-    }
+    public static byte[] ConfigJs(string server, string bundle = "") =>
+        ShellConfig.Js([("platform", "tizen"), ("server", server), ("bundle", bundle)]);
 
     /// <summary>Signs and zips: the .wgt the TV installs.</summary>
     public static byte[] BuildSigned(string server, SigningIdentity author, SigningIdentity distributor, string bundle = "")

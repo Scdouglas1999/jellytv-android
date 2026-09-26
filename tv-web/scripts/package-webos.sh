@@ -2,7 +2,7 @@
 # Builds the webOS package (dist/io.github.scdouglas1999.tally_<version>_all.ipk): the installed shell.
 #   scripts/package-webos.sh [--server http://192.168.1.50:8096]
 # ARES overrides the folder of the webOS CLI (default ~/tools/webos-cli/node_modules/.bin).
-# The webOS build is after the Samsung one (ARCHITECTURE.md): this packages and installs, the app code is shared.
+# For development with LG's CLI (ares-install); people use Tally for LG (installer/lg), which writes the same package.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 SERVER="" BUNDLE=""

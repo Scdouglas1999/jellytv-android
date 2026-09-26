@@ -69,13 +69,11 @@ let profileCache: ReturnType<typeof buildDeviceProfile> | null = null;
 
 export function deviceProfile(platform: Platform, maxBitrate: number): ReturnType<typeof buildDeviceProfile> {
   if (profileCache === null) {
-    let uhd: boolean;
-    try {
-      uhd = window.webapis?.productinfo?.isUdPanelSupported?.() === true;
-    } catch {
-      uhd = false;
-    }
-    profileCache = buildDeviceProfile(detectCapabilities(platform.name, browserProbe(), uhd), ORIGINAL_MAX_BITRATE);
+    const display = platform.display();
+    profileCache = buildDeviceProfile(
+      detectCapabilities(platform.name, browserProbe(), { ...display, osVersion: platform.osVersion() }),
+      ORIGINAL_MAX_BITRATE,
+    );
   }
   return { ...profileCache, MaxStreamingBitrate: maxBitrate, MaxStaticBitrate: maxBitrate };
 }

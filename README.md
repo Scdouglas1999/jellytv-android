@@ -163,7 +163,20 @@ Installing it takes a computer on the same network: turn on the TV's Developer M
 **Tally for Samsung** (`Tally-Samsung-Installer-windows.exe`, or the Linux and macOS versions, from the
 [latest release](https://github.com/Scdouglas1999/Tally/releases/latest)). It finds the TV, signs Tally for it and
 installs it. [tv-web/INSTALL-SAMSUNG.md](tv-web/INSTALL-SAMSUNG.md) walks through every step. On 2023 and newer
-Samsung TVs, the installer asks you to sign in with a free Samsung account once. LG TVs are next.
+Samsung TVs, the installer asks you to sign in with a free Samsung account once.
+
+### LG TVs
+
+LG smart TVs from 2020 on (webOS 5 and newer) get the same Tally: sports, the player, multiview (the focused tile
+plays and the others show live cards, since LG TVs play one video at a time), and the Magic Remote's pointer as well
+as its arrow keys. Like on Samsung, the TV app comes from your server's Tally plugin, so plugin updates update the TV.
+
+Installing it takes a computer on the same network and LG's free **Developer Mode** app on the TV, which needs a free
+LG developer account. Then run **Tally for LG** (`Tally-LG-Installer-windows.exe`, or the Linux and macOS versions,
+from the [latest release](https://github.com/Scdouglas1999/Tally/releases/latest)). It finds the TV, asks for the
+passphrase the Developer Mode app shows, and installs Tally. [tv-web/INSTALL-LG.md](tv-web/INSTALL-LG.md) walks
+through every step. LG removes apps installed this way when Developer Mode's session runs out; once someone has
+signed in on the TV, the server's Tally plugin renews that session every day, so Tally stays.
 
 ## The server plugin
 
@@ -175,7 +188,7 @@ Tally is a complete Jellyfin app on its own. The server plugin adds the parts th
 - the install page and the short Downloader code
 - **Play on TV**: start something on your TV from Jellyfin in your phone's browser
 - recording games in the background (the DVR)
-- the Tally TV app for Samsung TVs
+- the Tally TV app for Samsung and LG TVs, and keeping LG's Developer Mode on for it
 - the Tally look for Jellyfin in a web browser, with a Sports page (you can turn it off in the plugin's settings)
 
 It works with Jellyfin 10.10, 10.11 and 12.1. Its source is in [`server/`](server/), in this repository, under the

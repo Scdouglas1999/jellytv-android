@@ -6,6 +6,7 @@ import { app } from '../../app/context';
 import type { PageProps } from '../../app/page';
 import { setFocus } from '../../focus/focus';
 import { isRepeat, useKeyHandler } from '../../platform/keyRouter';
+import { usePointerActivity } from '../../platform/pointer';
 import type { VideoScale } from '../../player/engine';
 import { nativeAudioFor, preparePlayback, reporter, type Prepared } from '../../player/playback';
 import { bitrateLabel, qualityOptions, type QualityOption } from '../../player/qualityLadder';
@@ -164,6 +165,12 @@ export function PlayerPage(props: PageProps<Extract<Route, { name: 'player' }>>)
     window.clearTimeout(hideTimer.current);
     setOverlay('hidden');
   };
+
+  // LG's Magic Remote: moving the pointer (or clicking the picture) brings the controls up and keeps them up
+  usePointerActivity(() => {
+    if (overlay === 'hidden') showControls();
+    else pulse();
+  }, props.active);
 
   // focus the button asked for once the controller is on screen (a layout effect: a quick next key lands on it)
   useLayoutEffect(() => {

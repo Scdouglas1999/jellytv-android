@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- What "Tally for Samsung" and "Tally for LG" share: the console the person sees, the Jellyfin server check and
+       question, the home-network scan, the config.js the shells read, the sign-in hand-off text, the log file and the
+       program's frame (options, log, Ctrl+C, "Press Enter to close"). Nothing platform-specific lives here. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <AssemblyName>Tally.Installer.Common</AssemblyName>
+    <RootNamespace>Tally.Installer</RootNamespace>
+    <IsTrimmable>true</IsTrimmable>
+    <DebugType>embedded</DebugType>
+  </PropertyGroup>
+
+</Project>

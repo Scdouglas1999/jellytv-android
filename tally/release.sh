@@ -1,7 +1,8 @@
 #!/bin/bash
 # Builds a Tally release into tally/out/: the signed APKs for Android TV, the server plugin (a zip per Jellyfin
 # version, Tally-Server-Setup.exe, docker-compose.yml, install-linux.sh, and the plugin repository's manifest.json), and
-# "Tally for Samsung", the Samsung TV installer (Tally-Samsung-Installer-windows.exe, -linux, -macos-arm64, -macos-x64).
+# "Tally for Samsung" and "Tally for LG", the TV installers (Tally-Samsung-Installer-windows.exe, -linux, -macos-arm64,
+# -macos-x64, and the same four Tally-LG-Installer-*).
 #   tally/release.sh              build everything and show what --publish would run
 #   tally/release.sh --publish    also tag, push, create the GitHub release and publish the plugin repository entry
 #   --stores                      also build the Play bundle and the Amazon APK
@@ -97,17 +98,21 @@ chmod +x "$OUT/install-linux.sh"
 python3 server/manifest.py add server/manifest.json --tag "$SERVER_TAG" "$OUT"/Tally-server-"$SERVER_VERSION"-jf*.zip --out "$OUT/manifest.json"
 grep -q "TALLY_VERSION: \"$SERVER_VERSION\"" "$OUT/docker-compose.yml" && grep -q "TALLY_VERSION:-$SERVER_VERSION}" "$OUT/install-linux.sh" \
   || { echo "could not stamp $SERVER_VERSION into docker-compose.yml / install-linux.sh" >&2; exit 1; }
-# "Tally for Samsung": the program that installs the Tally TV app on a Samsung TV (one per desktop OS, same source).
-# It carries the TV shell (tv-web/shell) and signs it on the user's PC; nothing about a server is inside it.
-TALLY_VERSION="$SERVER_VERSION" DOTNET="$DOTNET" tv-web/installer/build.sh
-SAMSUNG_INSTALLERS=(Tally-Samsung-Installer-windows.exe Tally-Samsung-Installer-linux Tally-Samsung-Installer-macos-arm64 Tally-Samsung-Installer-macos-x64)
-for f in "${SAMSUNG_INSTALLERS[@]}"; do cp "tv-web/installer/dist/$f" "$OUT/"; done
-( cd "$OUT" && md5sum Tally-server-*.zip Tally-Server-Setup.exe Tally-Samsung-Installer-* )
+# "Tally for Samsung" and "Tally for LG": the programs that install the Tally TV app on a Samsung or LG TV (one per
+# desktop OS each, one source tree). They carry the TV shell (tv-web/shell) and package it on the user's PC; nothing
+# about a server is inside them.
+TALLY_VERSION="$SERVER_VERSION" DOTNET="$DOTNET" tv-web/installer/build.sh all
+TV_INSTALLERS=()
+for program in Samsung LG; do
+  for os in windows.exe linux macos-arm64 macos-x64; do TV_INSTALLERS+=("Tally-$program-Installer-$os"); done
+done
+for f in "${TV_INSTALLERS[@]}"; do cp "tv-web/installer/dist/$f" "$OUT/"; done
+( cd "$OUT" && md5sum Tally-server-*.zip Tally-Server-Setup.exe Tally-Samsung-Installer-* Tally-LG-Installer-* )
 ls -lh "$OUT"
 
 ASSETS=("$OUT"/Tally.apk "$OUT"/Tally-arm64-v8a.apk "$OUT"/Tally-armeabi-v7a.apk "$OUT"/Tally-x86_64.apk "$OUT"/Wholphin-release*.apk
         "$OUT"/Tally-server-"$SERVER_VERSION"-jf*.zip "$OUT"/Tally-Server-Setup.exe "$OUT"/docker-compose.yml "$OUT"/install-linux.sh
-        "${SAMSUNG_INSTALLERS[@]/#/$OUT/}")
+        "${TV_INSTALLERS[@]/#/$OUT/}")
 # After the release exists (so its zips can be downloaded), main gets the plugin repository entry and the new
 # default version for the Docker and Linux installs.
 publish_repository() {
