@@ -3,6 +3,7 @@ package io.github.scdouglas1999.tally
 import com.sun.net.httpserver.HttpServer
 import io.github.scdouglas1999.tally.lan.MemoryRouteStore
 import io.github.scdouglas1999.tally.lan.RouteRecovery
+import io.github.scdouglas1999.tally.lan.RouteSockets
 import io.github.scdouglas1999.tally.lan.ServerRouter
 import io.github.scdouglas1999.tally.lan.StoredAddress
 import io.github.scdouglas1999.tally.lan.StoredRoute
@@ -23,9 +24,14 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.IOException
 import java.net.ConnectException
+import java.net.InetAddress
 import java.net.InetSocketAddress
+import java.net.ServerSocket
+import java.net.Socket
 import java.net.SocketTimeoutException
 import java.util.UUID
+import java.util.concurrent.TimeUnit
+import kotlin.concurrent.thread
 
 class ServerRouterTest {
     private val serverId = "6cc26f6bbc534181a937364479f2910d"
@@ -309,5 +315,92 @@ class ServerRouterTest {
         publicServer.stop(0)
         client(router).get("$public/Items")
         assertTrue(router.lastFailoverAt > 0L)
+    }
+
+    /** An address that accepts connections and never answers anything, not even `/System/Info/Public`. */
+    private fun silentAddress(): String {
+        val socket = ServerSocket(0, 50, InetAddress.getByName("127.0.0.1"))
+        silent += socket
+        thread(isDaemon = true) {
+            val held = mutableListOf<Socket>()
+            while (!socket.isClosed) {
+                try {
+                    held += socket.accept()
+                } catch (e: IOException) {
+                    break
+                }
+            }
+            held.forEach { it.close() }
+        }
+        return "http://127.0.0.1:${socket.localPort}"
+    }
+
+    private val silent = mutableListOf<ServerSocket>()
+
+    @After
+    fun closeSilent() {
+        silent.forEach { it.close() }
+    }
+
+    @Test
+    fun silentAddressIsLeftWithinSeconds() {
+        val saved = silentAddress()
+        val (_, other) = fake("other")
+        val sockets = RouteSockets()
+        val router = ServerRouter(MemoryRouteStore(), homeHost = { false }, sockets = sockets)
+        router.register(serverId, saved)
+        router.learn(serverId, other, home = false)
+        assertEquals(saved, router.activeAddress(serverId))
+        // the SDK's timeouts: 30 s to read, 30 s for the whole call
+        val client =
+            OkHttpClient
+                .Builder()
+                .addInterceptor(router.interceptor)
+                .socketFactory(sockets)
+                .readTimeout(30, TimeUnit.SECONDS)
+                .callTimeout(30, TimeUnit.SECONDS)
+                .build()
+        val started = System.nanoTime()
+        assertEquals("other GET /Items", client.get("$saved/Items"))
+        val tookMs = (System.nanoTime() - started) / 1_000_000
+        assertTrue("took $tookMs ms", tookMs < 8_000)
+        assertEquals(other, router.activeAddress(serverId))
+    }
+
+    @Test
+    fun slowServerKeepsItsAddress() {
+        // answers its probe at once, but takes 4 s for the request itself (a transcode starting)
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.executor =
+            java.util.concurrent.Executors
+                .newCachedThreadPool()
+        server.createContext("/") { exchange ->
+            val body =
+                if (exchange.requestURI.path.endsWith("/System/Info/Public")) {
+                    """{"Id":"$serverId"}"""
+                } else {
+                    Thread.sleep(4_000)
+                    "slow ${exchange.requestURI.path}"
+                }
+            val bytes = body.toByteArray()
+            exchange.sendResponseHeaders(200, bytes.size.toLong())
+            exchange.responseBody.use { it.write(bytes) }
+        }
+        server.start()
+        servers += server
+        val slow = "http://127.0.0.1:${server.address.port}"
+        val (_, other) = fake("other")
+        val sockets = RouteSockets()
+        val router = ServerRouter(MemoryRouteStore(), homeHost = { false }, sockets = sockets)
+        router.register(serverId, slow)
+        router.learn(serverId, other, home = false)
+        val client =
+            OkHttpClient
+                .Builder()
+                .addInterceptor(router.interceptor)
+                .socketFactory(sockets)
+                .build()
+        assertEquals("slow /Videos/1/hls1/main/0.ts", client.get("$slow/Videos/1/hls1/main/0.ts"))
+        assertEquals(slow, router.activeAddress(serverId))
     }
 }

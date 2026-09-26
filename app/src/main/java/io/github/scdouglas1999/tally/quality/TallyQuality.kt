@@ -7,6 +7,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import org.jellyfin.sdk.model.api.MediaSourceInfo
+import org.jellyfin.sdk.model.api.MediaStreamType
 
 /**
  * In-player quality choice ("Original" or a lower bitrate), which Wholphin lacks: it only has one global maximum
@@ -33,8 +35,8 @@ object TallyQuality {
     fun maxBitrateOverride(): Int? = _choice.value
 
     /**
-     * Read by `changeStreams` for a transcoded stream. With a quality chosen, the server must re-encode the video, at
-     * no more than the chosen rung's height:
+     * Read by `changeStreams` for a transcoded stream of [source]. With a quality chosen, the server must re-encode the
+     * video, at no more than the chosen rung's height:
      *  - `AllowVideoStreamCopy=false`: otherwise it copies a source whose reported bitrate is below the cap, and live
      *    channels report only their audio's bitrate (a 720p channel shows as 0.19 Mbps). Jellyfin 10.10 leaves the
      *    flag out of the transcoding URL even when the request disallowed it.
@@ -43,8 +45,16 @@ object TallyQuality {
      *    1080p at ~4.9 Mbps for "480p · 2"). The height is what reliably lowers it, and it makes every rung's label
      *    true (a 1 Mbps cap alone gave 480p where the label says 360p).
      *  - `MaxWidth`, the 16:9 width of that height: Jellyfin 10.10 ignores `MaxHeight` alone for films and episodes.
+     *  - no `MaxFramerate` when the source is not faster than it: Jellyfin 10.10 then scales nothing (the output keeps
+     *    the source's rate either way), but it also takes that number as the output rate when it decides whether the
+     *    bitrate is enough for the size: with the device profile's 60 it halves the bitrate and steps the width down
+     *    (ResolutionNormalizer), and drops the height limit when it does. Measured on the dev server with an
+     *    8.4 Mbps 1080p60 channel: "720p · 5 Mbps" played at 960x540; "1080p · 8 Mbps" would play at 720p.
      */
-    fun transcodingUrl(url: String): String {
+    fun transcodingUrl(
+        url: String,
+        source: MediaSourceInfo? = null,
+    ): String {
         val choice = _choice.value ?: return url
         var result = url
         if (!url.contains("AllowVideoStreamCopy=", ignoreCase = true)) result += "&AllowVideoStreamCopy=false"
@@ -54,8 +64,38 @@ object TallyQuality {
         // at 852x480
         result = capParameter(result, "MaxHeight", height)
         result = capParameter(result, "MaxWidth", QualityLadder.widthFor(height))
+        val sourceRate =
+            source
+                ?.mediaStreams
+                ?.firstOrNull { it.type == MediaStreamType.VIDEO }
+                ?.let { it.realFrameRate ?: it.averageFrameRate }
+        result = withoutRedundantMaxFramerate(result, sourceRate)
         return result
     }
+
+    /** [url] without `MaxFramerate` when the source's [sourceRate] is known and not above it. */
+    internal fun withoutRedundantMaxFramerate(
+        url: String,
+        sourceRate: Float?,
+    ): String {
+        if (sourceRate == null || sourceRate <= 0f) return url
+        val match = Regex("([?&])MaxFramerate=([0-9.]*)(&?)", RegexOption.IGNORE_CASE).find(url) ?: return url
+        val max = match.groupValues[2].toFloatOrNull() ?: return url
+        if (sourceRate > max + FRAME_RATE_SLACK) return url
+        val (lead, _, trail) = match.destructured
+        val replacement =
+            if (lead == "?" && trail.isNotEmpty()) {
+                "?"
+            } else if (trail.isNotEmpty()) {
+                lead
+            } else {
+                ""
+            }
+        return url.replaceRange(match.range, replacement)
+    }
+
+    /** 59.94 counts as 60. */
+    private const val FRAME_RATE_SLACK = 0.5f
 
     /** [url] with its [name] query parameter at most [value]: lowered when present and larger, added when missing. */
     internal fun capParameter(

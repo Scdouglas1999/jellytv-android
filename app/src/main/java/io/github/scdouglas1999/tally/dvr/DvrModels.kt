@@ -90,6 +90,12 @@ data class DvrJob(
     val itemId: String? = null,
     /** Root-relative, signed start-over playlist, while recording. */
     val startOverPath: String? = null,
+    /**
+     * Whether the recording can be played from a library yet: `ready` ([itemId] is set), `adding` (a library covers
+     * the file, Jellyfin has not picked it up yet) or `noLibrary` (no library covers the recordings folder). Older
+     * plugins leave it out: see [libraryAvailability].
+     */
+    val libraryState: String? = null,
 ) {
     val isRecording: Boolean get() = state == DvrState.RECORDING
     val isPending: Boolean get() = state == DvrState.SCHEDULED || state == DvrState.WAITING
@@ -114,6 +120,25 @@ data class DvrEstimate(
     /** Why it won't fit ("Not enough space: needs ~9 GB, 4 GB free"), from the server. */
     val message: String? = null,
 )
+
+/** Why a finished recording cannot be played yet, or [READY]: the job's `libraryState`. */
+enum class LibraryAvailability {
+    READY,
+    ADDING,
+    NO_LIBRARY,
+}
+
+/**
+ * The job's [DvrJob.libraryState], with the rules for plugins that do not send it: a recording with an `itemId` is
+ * ready; one without is still being added. An unknown value counts the same way.
+ */
+val DvrJob.libraryAvailability: LibraryAvailability
+    get() =
+        when {
+            itemId != null -> LibraryAvailability.READY
+            libraryState == "noLibrary" -> LibraryAvailability.NO_LIBRARY
+            else -> LibraryAvailability.ADDING
+        }
 
 /** The job states, as the server names them. */
 object DvrState {

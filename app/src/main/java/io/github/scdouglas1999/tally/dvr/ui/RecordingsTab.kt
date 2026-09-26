@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -48,6 +49,7 @@ import io.github.scdouglas1999.tally.dvr.GameRecordingView
 import io.github.scdouglas1999.tally.dvr.recordingStateText
 import io.github.scdouglas1999.tally.media.kit.LandscapeCard
 import io.github.scdouglas1999.tally.media.kit.tallyClickable
+import io.github.scdouglas1999.tally.ui.LocalTallyUpTarget
 import io.github.scdouglas1999.tally.ui.components.EmptyState
 import io.github.scdouglas1999.tally.ui.components.IndicatorSquare
 import io.github.scdouglas1999.tally.ui.components.KeyHint
@@ -104,10 +106,17 @@ fun RecordingsTab(modifier: Modifier = Modifier) {
 
     fun Modifier.firstOnPage(key: String): Modifier = if (key == firstKey) this.focusRequester(firstFocus).upToTab() else this
 
+    // focus stays on this tab when the focused entry leaves the list (a recording finished, a job was canceled)
+    val keepFocus = rememberRecordingsFocus()
+    val listState = rememberLazyListState()
+    keepFocus.layout(sections.focusOrder(), sections.lazyIndices())
+    RecordingsFocusEffect(keepFocus, listState, LocalTallyUpTarget.current)
+
     LazyColumn(
+        state = listState,
         verticalArrangement = Arrangement.spacedBy(10.dp),
         contentPadding = PaddingValues(top = 20.dp, bottom = TallyDimens.marginVertical),
-        modifier = modifier,
+        modifier = modifier.recordingsList(keepFocus),
     ) {
         item(key = "storage") {
             Text(
@@ -139,7 +148,7 @@ fun RecordingsTab(modifier: Modifier = Modifier) {
                     if (startOver != null) viewModel.watchFromStart(job.id, startOver, title) else menuJob = job
                 },
                 onLongClick = { menuJob = job },
-                modifier = Modifier.firstOnPage(job.id),
+                modifier = Modifier.firstOnPage(job.id).recordingsEntry(keepFocus, job.id),
             ) {
                 if (startOver !=
                     null
@@ -160,7 +169,7 @@ fun RecordingsTab(modifier: Modifier = Modifier) {
                 indicator = TallyColors.ruleStrong,
                 onClick = { if (canManage) menuJob = job },
                 onLongClick = { if (canManage) menuJob = job },
-                modifier = Modifier.firstOnPage(job.id),
+                modifier = Modifier.firstOnPage(job.id).recordingsEntry(keepFocus, job.id),
             ) {
                 if (canManage) KeyHint(key = stringResource(R.string.tally_key_ok), label = stringResource(R.string.tally_dvr_cancel))
             }
@@ -182,7 +191,7 @@ fun RecordingsTab(modifier: Modifier = Modifier) {
                             imageUrl = recordingImageUrl(viewModel, job),
                             onClick = { playRecorded(viewModel, job, context) },
                             onLongClick = { menuJob = job },
-                            modifier = Modifier.firstOnPage(job.id),
+                            modifier = Modifier.firstOnPage(job.id).recordingsEntry(keepFocus, job.id),
                         )
                     }
                 }
@@ -196,7 +205,7 @@ fun RecordingsTab(modifier: Modifier = Modifier) {
                 indicator = TallyColors.live,
                 onClick = { if (canManage) viewModel.dismiss(job.id) },
                 onLongClick = { if (canManage) viewModel.dismiss(job.id) },
-                modifier = Modifier.firstOnPage(job.id),
+                modifier = Modifier.firstOnPage(job.id).recordingsEntry(keepFocus, job.id),
             ) {
                 if (canManage) KeyHint(key = stringResource(R.string.tally_key_ok), label = stringResource(R.string.tally_dvr_dismiss))
             }
@@ -208,7 +217,7 @@ fun RecordingsTab(modifier: Modifier = Modifier) {
                 indicator = TallyColors.muted,
                 onClick = { if (canManage) keepRule = rule },
                 onLongClick = { if (canManage) keepRule = rule },
-                modifier = Modifier.firstOnPage(rule.id),
+                modifier = Modifier.firstOnPage(rule.id).recordingsEntry(keepFocus, rule.id),
             ) {
                 if (canManage) KeyHint(key = stringResource(R.string.tally_key_ok), label = stringResource(R.string.tally_dvr_change))
             }

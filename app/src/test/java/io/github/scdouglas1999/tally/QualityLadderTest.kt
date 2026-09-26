@@ -404,4 +404,79 @@ class QualityLadderTest {
                 .choose(null)
         }
     }
+
+    @Test
+    fun `the device profile's frame rate cap goes when the source is not faster`() {
+        val quality = io.github.scdouglas1999.tally.quality.TallyQuality
+        val asked = "/videos/9a17/master.m3u8?VideoBitrate=5050880&MaxFramerate=60&MaxWidth=1280&MaxHeight=720"
+        assertEquals(
+            "/videos/9a17/master.m3u8?VideoBitrate=5050880&MaxWidth=1280&MaxHeight=720",
+            quality.withoutRedundantMaxFramerate(asked, 60f),
+        )
+        assertEquals(
+            "/videos/9a17/master.m3u8?VideoBitrate=5050880&MaxWidth=1280&MaxHeight=720",
+            quality.withoutRedundantMaxFramerate(asked, 29.97f),
+        )
+        // 59.94 is 60
+        assertEquals(false, quality.withoutRedundantMaxFramerate(asked, 59.94f).contains("MaxFramerate"))
+        // a faster source keeps the cap, as does an unknown rate
+        assertEquals(asked, quality.withoutRedundantMaxFramerate(asked, 120f))
+        assertEquals(asked, quality.withoutRedundantMaxFramerate(asked, null))
+        assertEquals("/x?MaxWidth=1", quality.withoutRedundantMaxFramerate("/x?MaxFramerate=60&MaxWidth=1", 30f))
+        assertEquals("/x?MaxWidth=1", quality.withoutRedundantMaxFramerate("/x?MaxWidth=1&MaxFramerate=60", 30f))
+
+        fun source(live: Boolean) =
+            MediaSourceInfo(
+                protocol = MediaProtocol.HTTP,
+                type = MediaSourceType.DEFAULT,
+                isRemote = false,
+                readAtNativeFramerate = false,
+                ignoreDts = true,
+                ignoreIndex = false,
+                genPtsInput = false,
+                supportsTranscoding = true,
+                supportsDirectStream = false,
+                supportsDirectPlay = false,
+                isInfiniteStream = live,
+                requiresOpening = live,
+                requiresClosing = live,
+                requiresLooping = false,
+                supportsProbing = true,
+                transcodingSubProtocol = MediaStreamProtocol.HLS,
+                hasSegments = false,
+                liveStreamId = if (live) "e2329f49_af999c25_ae9f0714" else null,
+                mediaStreams =
+                    listOf(
+                        MediaStream(
+                            type = MediaStreamType.VIDEO,
+                            index = -1,
+                            width = 1920,
+                            height = 1080,
+                            realFrameRate = 60f,
+                            isInterlaced = false,
+                            isDefault = false,
+                            isForced = false,
+                            isHearingImpaired = false,
+                            isExternal = false,
+                            isTextSubtitleStream = false,
+                            supportsExternalStream = false,
+                        ),
+                    ),
+            )
+        quality.choose(mbit(5))
+        try {
+            // the URL the app asked for on the dev server (an 8.4 Mbps 1080p60 channel, 720p · 5 Mbps)
+            val sent = "/videos/9a17/master.m3u8?VideoBitrate=5050880&MaxFramerate=60&TranscodeReasons=DirectPlayError"
+            val live = quality.transcodingUrl(sent, source(live = true))
+            assertEquals(
+                "/videos/9a17/master.m3u8?VideoBitrate=5050880&TranscodeReasons=DirectPlayError" +
+                    "&AllowVideoStreamCopy=false&MaxHeight=720&MaxWidth=1280",
+                live,
+            )
+            // without the source (a caller that has none) the URL keeps its cap
+            assertTrue(quality.transcodingUrl(sent).contains("MaxFramerate=60"))
+        } finally {
+            quality.choose(null)
+        }
+    }
 }

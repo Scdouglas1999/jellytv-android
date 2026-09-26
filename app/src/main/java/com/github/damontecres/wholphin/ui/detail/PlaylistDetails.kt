@@ -1,3 +1,6 @@
+// Modified for Tally (https://github.com/Scdouglas1999/Tally), a fork of Wholphin
+// (https://github.com/damontecres/Wholphin), from September 2026. Changes are marked TALLY: begin/end;
+// each change and its date is in the git history. See NOTICE.md.
 package com.github.damontecres.wholphin.ui.detail
 
 import android.content.Context
@@ -417,6 +420,23 @@ class PlaylistViewModel
             direction: MoveDirection,
         ) {
             viewModelScope.launchIO {
+                // TALLY: begin
+                // Jellyfin 10.10's Move lands one place off: there the entry is moved with calls that land right
+                val tallyItems = state.value.items
+                if (io.github.scdouglas1999.tally.media.playlist.PlaylistMove.moveOnOffByOneServer(
+                        api = api,
+                        serverVersion = serverRepository.currentServer?.serverVersion,
+                        playlistId = this@PlaylistViewModel.itemId,
+                        size = tallyItems.size,
+                        index = index,
+                        up = direction == MoveDirection.UP,
+                        idAt = { tallyItems.getOrNull(it)?.id },
+                    )
+                ) {
+                    (tallyItems as? ApiRequestPager<*>)?.refreshPagesAfter(index - 1)
+                    return@launchIO
+                }
+                // TALLY: end
                 val newIndex = index + if (direction == MoveDirection.UP) -1 else 1
                 api.playlistsApi.moveItem(
                     playlistId = this@PlaylistViewModel.itemId.toServerString(),

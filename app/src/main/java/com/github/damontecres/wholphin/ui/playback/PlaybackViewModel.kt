@@ -789,7 +789,10 @@ class PlaybackViewModel
                         } else {
                             source.transcodingUrl
                                 // TALLY: begin
-                                ?.let(io.github.scdouglas1999.tally.quality.TallyQuality::transcodingUrl)
+                                ?.let {
+                                    io.github.scdouglas1999.tally.quality.TallyQuality
+                                        .transcodingUrl(it, source)
+                                }
                                 // TALLY: end
                                 ?.let(api::createUrl)
                         }

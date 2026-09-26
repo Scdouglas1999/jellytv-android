@@ -537,7 +537,9 @@ fun TallyNavDrawer(
                 )
             }
             if (preferences.appPreferences.interfacePreferences.showClock) {
-                TimeDisplay()
+                // The clock belongs to the page's top corner: it moves aside with the page while the panel is out,
+                // instead of staying put over the page's top bar (it covered the SETTINGS tab on Sports).
+                TimeDisplay(Modifier.offset { offset })
             }
         }
     }

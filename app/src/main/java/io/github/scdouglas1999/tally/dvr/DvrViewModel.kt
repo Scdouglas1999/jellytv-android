@@ -13,9 +13,11 @@ import io.github.scdouglas1999.tally.api.TallyTeam
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.userLibraryApi
@@ -55,6 +57,11 @@ class DvrViewModel
 
         private val _notices = MutableSharedFlow<DvrNotice>(extraBufferCapacity = 8)
         val notices: SharedFlow<DvrNotice> = _notices.asSharedFlow()
+
+        private val _libraryNotice = MutableStateFlow<LibraryAvailability?>(null)
+
+        /** A finished recording was chosen that has no library item yet: why ([RecordingsTabEffects] shows it). */
+        val libraryNotice: StateFlow<LibraryAvailability?> = _libraryNotice.asStateFlow()
 
         private var polling = false
 
@@ -143,6 +150,16 @@ class DvrViewModel
                     navigationManager.navigateTo(Destination.Playback(itemId = id, positionMs = positionMs))
                 }
             }
+        }
+
+        /** Plays [job]'s recording, or says why it cannot be played yet (no library item: [libraryNotice]). */
+        fun playFinished(job: DvrJob) {
+            val itemId = job.itemId
+            if (itemId == null) _libraryNotice.value = job.libraryAvailability else playRecording(itemId)
+        }
+
+        fun dismissLibraryNotice() {
+            _libraryNotice.value = null
         }
 
         fun absoluteUrl(path: String): String? = repository.absoluteUrl(path)
