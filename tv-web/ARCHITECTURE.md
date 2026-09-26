@@ -772,8 +772,11 @@ Proposed parallel tasks after tvweb-0: `tvweb-details` (4), `tvweb-library` (3),
   kept. Not verifiable there: the emulator's pipeline plays MP4 and MKV but refuses MPEG-TS files and every HLS
   (TS or fMP4, `MEDIA_ERR_SRC_NOT_SUPPORTED`), so live channels, converted streams and quality rungs (HLS in TS
   from the server) stay "tuning in" there; `com.webos.service.tvpower` (the screensaver) does not exist there
-  either; no Developer Mode session token (the emulator has no Developer Mode app). One `<video>` decoder is
-  assumed, not measured there (HLS tiles cannot play).
+  either; no Developer Mode session token (the emulator has no Developer Mode app): with a test token written into
+  the installed config.js, the app handed it to this branch's plugin once signed in ("keeping LG Developer Mode on
+  for LG webOS.TV", the settings line's 1 TV) and the plugin's renewal failed as it should in a container whose
+  developer.lge.com pointed at loopback (nothing reached LG). One `<video>` decoder is assumed, not measured there
+  (HLS tiles cannot play).
 
 ## 13. Feature parity with the Android TV app
 

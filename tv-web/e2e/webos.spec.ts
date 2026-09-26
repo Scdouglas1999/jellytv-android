@@ -265,11 +265,8 @@ async function filmOnWebos(page: Page, info: import('@playwright/test').TestInfo
 
   // the Magic Remote in the player: with the controls hidden, moving the pointer brings them up; the pointer on
   // AUDIO focuses it and a click opens its panel (found on LG's webOS 5 emulator: the controls hid under the pointer)
-  for (let i = 0; i < 3 && (await page.locator('.pc-row').isVisible()); i++) {
-    await lgKey(page, 461);
-    await page.waitForTimeout(300);
-  }
-  await expect(page.locator('.pc-row')).toBeHidden();
+  // (the controls hide by themselves after 5 s; BACK would leave the player if they went just before it)
+  await expect(page.locator('.pc-row')).toBeHidden({ timeout: 10_000 });
   await page.mouse.move(960, 400, { steps: 3 });
   await expect(page.locator('.pc-row')).toBeVisible();
   const audio = await page.evaluate(() => {
@@ -291,11 +288,7 @@ async function filmOnWebos(page: Page, info: import('@playwright/test').TestInfo
     await expect(page.locator('.pc-sidepanel')).toBeHidden();
     // the controls hidden again, the pointer goes straight to where AUDIO is: they come up under it with PLAY
     // focused, and a click there is AUDIO, not PLAY (OK only once the focus moved; the film paused on the emulator)
-    for (let i = 0; i < 3 && (await page.locator('.pc-row').isVisible()); i++) {
-      await lgKey(page, 461);
-      await page.waitForTimeout(300);
-    }
-    await expect(page.locator('.pc-row')).toBeHidden();
+    await expect(page.locator('.pc-row')).toBeHidden({ timeout: 10_000 });
     await page.mouse.move(audio.x + 2, audio.y + 1);
     await expect(page.locator('.pc-row')).toBeVisible();
     await page.mouse.click(audio.x + 2, audio.y + 1);
