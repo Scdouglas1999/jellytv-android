@@ -12,7 +12,7 @@ services:
     restart: "no"
     environment:
       # The Tally release to install first. Later versions arrive through Jellyfin's plugin updates.
-      TALLY_VERSION: "2.1.0"
+      TALLY_VERSION: "2.2.0"
       JELLYFIN_VERSION: ${JELLYFIN_VERSION:-12.1}
       TALLY_RELEASES: ${TALLY_RELEASES:-https://github.com/Scdouglas1999/Tally/releases/download}
     volumes:

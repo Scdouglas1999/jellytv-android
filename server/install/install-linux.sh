@@ -10,7 +10,7 @@
 # an older or mismatched Tally.
 set -euo pipefail
 
-TALLY_VERSION="${TALLY_VERSION:-2.1.0}"
+TALLY_VERSION="${TALLY_VERSION:-2.2.0}"
 TALLY_RELEASES="${TALLY_RELEASES:-https://github.com/Scdouglas1999/Tally/releases/download}"
 JELLYFIN_INSTALL_SCRIPT="https://repo.jellyfin.org/install-debuntu.sh"
 TALLY_GUID="91920c7b-e920-46ee-b4d3-421f05d3761b"
