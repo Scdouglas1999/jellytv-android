@@ -54,7 +54,8 @@ Put `docker-compose.yml` from the release in an empty folder and run `docker com
 `jellyfin/jellyfin` image (12.1 unless you set `JELLYFIN_VERSION`, for example `JELLYFIN_VERSION=10.10.7`), with
 its config in `./config` and cache in `./cache`. Add your media folders to the `volumes:` list in the file first,
 and set your time zone: `TZ` in the file (or in your shell, or an `.env` file next to it) is `America/New_York` unless
-you change it. Containers otherwise run in UTC, and Tally's channel cards would show times hours off.
+you change it. Containers otherwise run in UTC, and Jellyfin's guide and the channel cards it shows would be hours
+off (the Tally apps ask for their own zone). The command in the file's comment writes this computer's zone to `.env`.
 
 Before Jellyfin starts, a small one-time service (`tally-plugin`, Alpine Linux) downloads the plugin zip for that
 Jellyfin version from the release and unpacks it into `./config/plugins/`. If Tally is already there it leaves it
@@ -73,9 +74,9 @@ curl -fsSL https://github.com/Scdouglas1999/Tally/releases/latest/download/insta
 If Jellyfin is not installed, the script runs Jellyfin's own install script (`https://repo.jellyfin.org/install-debuntu.sh`),
 which adds Jellyfin's apt repository and installs the official packages. Then it stops Jellyfin, puts the Tally build
 for the installed Jellyfin version into `/var/lib/jellyfin/plugins/`, starts Jellyfin and prints the address to open.
-It needs systemd, and it installs `curl` and `unzip` if they are missing. It leaves the system's time zone alone;
-Jellyfin, and Tally's times, follow it. Running it again only replaces a Tally that
-is older or built for another Jellyfin version.
+It needs systemd, and it installs `curl` and `unzip` if they are missing. It leaves the system's time zone alone
+(Jellyfin, and Tally's times, follow it) but detects it and prints it at the end, with how to change it when it is UTC.
+Running it again only replaces a Tally that is older or built for another Jellyfin version.
 
 On other Linux systems, use the catalog or unpack the zip for your Jellyfin version into a `Tally_<version>` folder
 in Jellyfin's `plugins` folder, owned by the user Jellyfin runs as, and restart Jellyfin.

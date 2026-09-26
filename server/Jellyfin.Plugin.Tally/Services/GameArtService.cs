@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -22,7 +23,9 @@ public sealed class GameArtService
     public const int Width = 1920;
     public const int Height = 1080;
 
-    private const int CacheLimit = 64;
+    // every size of a game's art is one entry (the full size, which the smaller ones are scaled from, plus the sizes
+    // apps ask for)
+    private const int CacheLimit = 128;
     private const int LogoBox = 400;
     private const float SeamFeather = 80f;
     private const float LeftFade = 240f;
@@ -49,40 +52,58 @@ public sealed class GameArtService
     /// <summary>Root-relative path of a game's backdrop (the Client API prefixes the base path).</summary>
     public static string BackdropPath(GameInfo game) => $"/JellyTV/Backdrop/{Uri.EscapeDataString(game.Id)}.png";
 
-    /// <summary>The art for <paramref name="gameId"/>; a plain ground-colored image when the game is unknown.</summary>
-    public async Task<byte[]> RenderAsync(string gameId, CancellationToken ct)
+    /// <summary>The art for <paramref name="gameId"/>, <paramref name="width"/> wide (null: full size); a plain
+    /// ground-colored frame when the game is unknown.</summary>
+    public async Task<byte[]> RenderAsync(string gameId, int? width, CancellationToken ct)
     {
         try
         {
             if (string.IsNullOrEmpty(gameId))
             {
-                return RenderPlain();
+                return RenderPlain(width);
             }
 
-            if (TryGetCached(gameId, out var cached))
+            var sizedKey = CacheKey(gameId, width);
+            if (TryGetCached(sizedKey, out var cached))
             {
                 return cached;
             }
 
-            var games = await _scoreboard.GetGamesAsync(ct).ConfigureAwait(false);
-            var game = games.FirstOrDefault(g => string.Equals(g.Id, gameId, StringComparison.Ordinal));
-            if (game == null)
+            if (!TryGetCached(CacheKey(gameId, null), out var full))
             {
-                return RenderPlain();
+                var games = await _scoreboard.GetGamesAsync(ct).ConfigureAwait(false);
+                var game = games.FirstOrDefault(g => string.Equals(g.Id, gameId, StringComparison.Ordinal));
+                if (game == null)
+                {
+                    return RenderPlain(width);
+                }
+
+                var away = await GetLogoAsync(game.Away?.Logo, ct).ConfigureAwait(false);
+                var home = await GetLogoAsync(game.Home?.Logo, ct).ConfigureAwait(false);
+                full = Render(game, away, home);
+                Store(CacheKey(gameId, null), full);
             }
 
-            var away = await GetLogoAsync(game.Away?.Logo, ct).ConfigureAwait(false);
-            var home = await GetLogoAsync(game.Home?.Logo, ct).ConfigureAwait(false);
-            var png = Render(game, away, home);
-            Store(gameId, png);
+            if (width is not { } w)
+            {
+                return full;
+            }
+
+            var png = ArtRequest.Scale(full, w);
+            Store(sizedKey, png);
             return png;
         }
         catch (Exception ex)
         {
             _logger.LogDebug("JellyTV backdrop: {GameId} could not be drawn: {Message}", gameId, ex.Message);
-            return RenderPlain();
+            return RenderPlain(width);
         }
     }
+
+    /// <summary>Cache key of one drawn backdrop: the game and the width (null: full size). No zone: a backdrop has no
+    /// text, so it is the same in every zone.</summary>
+    public static string CacheKey(string gameId, int? width)
+        => width is { } w ? gameId + "@" + w.ToString(CultureInfo.InvariantCulture) : gameId;
 
     /// <summary>The backdrop for a game the caller already has (the DVR's fanart for a finished recording, whose game
     /// may have left the board). Not cached.</summary>
@@ -92,6 +113,12 @@ public sealed class GameArtService
         var home = await GetLogoAsync(game.Home?.Logo, ct).ConfigureAwait(false);
         return Render(game, away, home);
     }
+
+    private static readonly ConcurrentDictionary<int, byte[]> PlainFrames = new();
+
+    /// <summary>The plain frame <paramref name="width"/> wide (null: full size), drawn once per size.</summary>
+    public static byte[] RenderPlain(int? width)
+        => PlainFrames.GetOrAdd(width ?? Width, w => w >= Width ? RenderPlain() : ArtRequest.Scale(RenderPlain(), w));
 
     /// <summary>A flat ground-colored frame (unknown game, or no logos and no colors).</summary>
     public static byte[] RenderPlain()
@@ -447,11 +474,11 @@ public sealed class GameArtService
         return fallback.ToArray();
     }
 
-    private bool TryGetCached(string gameId, out byte[] png)
+    private bool TryGetCached(string key, out byte[] png)
     {
         lock (_cacheGate)
         {
-            if (_cache.TryGetValue(gameId, out var node))
+            if (_cache.TryGetValue(key, out var node))
             {
                 _recent.Remove(node);
                 _recent.AddFirst(node);
@@ -464,11 +491,11 @@ public sealed class GameArtService
         return false;
     }
 
-    private void Store(string gameId, byte[] png)
+    private void Store(string key, byte[] png)
     {
         lock (_cacheGate)
         {
-            if (_cache.TryGetValue(gameId, out var existing))
+            if (_cache.TryGetValue(key, out var existing))
             {
                 existing.Value.Png = png;
                 _recent.Remove(existing);
@@ -476,9 +503,9 @@ public sealed class GameArtService
                 return;
             }
 
-            var node = new LinkedListNode<CachedArt>(new CachedArt(gameId, png));
+            var node = new LinkedListNode<CachedArt>(new CachedArt(key, png));
             _recent.AddFirst(node);
-            _cache.Add(gameId, node);
+            _cache.Add(key, node);
             while (_cache.Count > CacheLimit)
             {
                 var last = _recent.Last!;

@@ -221,15 +221,19 @@ time) and follows the live ladder's continuous playlist through source switches.
   once (settable).
 - **Retention**: per team "keep the last N games", and "delete recordings after N days" (default: keep everything).
   A recording someone is watching is never deleted.
-- **Library**: Settings → Recordings offers **Create a Sports Recordings library** when no library covers the folder
-  (a Movies library with every internet metadata and image fetcher off, so the NFO and art stay). Nothing is created
-  without that click. A library made by hand works too.
+- **Library**: the first time a recording finishes and no library covers the recordings folder, the plugin creates
+  the **Sports Recordings** library itself (a Movies library with every internet metadata and image fetcher off, so
+  the NFO and art stay) and logs it. It does that once: if the owner removes that library, it is not created again.
+  Settings → Recordings says when no library covers the folder and offers **Create a Sports Recordings library**. A
+  library made by hand works too.
 
 Client API v1 (authenticated): `GET /JellyTV/Client/v1/recordings` (rules and jobs, and whether the caller may
 record), `POST /JellyTV/Client/v1/recordings` with `{"gameId": "…"}` or `{"teamId": "…", "league": "baseball/mlb"
 | "*", "keepLast": 0}`, `DELETE …/recordings/jobs/{id}` (cancel; a recording stops and keeps what it has),
 `DELETE …/recordings/jobs/{id}/recording` (delete a finished recording, its file and library item),
 `DELETE …/recordings/rules/{id}`, `GET …/recordings/storage[?gameId=…]` (folder, free, used, reserve, estimate).
+Every job carries `libraryState`: `ready` (`itemId` is set), `adding` (a library covers the file, Jellyfin has not
+added it yet) or `noLibrary` (no library covers the recordings folder); so does the board's `recording`.
 Changes without the permission answer 403 with `{"error": "…"}`. On the board each game with a job gains
 `recording: {state, jobId, startOverPath?, itemId?, reason?}`, and `/info` lists the `dvr` feature. Admin:
 `GET/POST /JellyTV/Recordings/Settings`, `GET /JellyTV/Recordings/Folder?path=`, `POST /JellyTV/Recordings/Library`.
@@ -250,6 +254,10 @@ web view — nothing can make them load the Tally web UI. Tally works *with* the
   ("Jets at Packers") instead of "Live". The native channel grid becomes a heat-sorted scoreboard where
   every card is a play button. Cards are minutes old, not seconds. Switch off under
   **Settings → Live scores → Live cards for TV apps**.
+- **Sizes and time zones**: cards and game backdrops (`/JellyTV/Backdrop/{gameId}.png`) take `w=<px>`, the width the
+  app draws them at: the server snaps it up to 320, 480, 640, 960, 1280 or 1920 (the art's own size when that is not
+  smaller) and caches each size. `tz=<IANA zone>` (`America/New_York`) sets the zone of the times drawn on a card;
+  without it, or with a zone the server does not know, the server's own zone is used.
 - **Play on TV**: in the Tally web UI (phone, tablet, laptop) tap the screen icon in the top bar and pick
   a TV. From then on every *Watch* — games, channels, switch alerts — plays on that TV through its own
   app, using the same remote-control channel as Jellyfin's cast button. The TV shows up while its app is
