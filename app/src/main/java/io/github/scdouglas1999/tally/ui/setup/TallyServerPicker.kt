@@ -44,6 +44,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.tv.material3.Text
 import com.github.damontecres.wholphin.R
 import com.github.damontecres.wholphin.data.model.JellyfinServer
+import com.github.damontecres.wholphin.services.SetupDestination
 import com.github.damontecres.wholphin.ui.components.DialogItem
 import com.github.damontecres.wholphin.ui.components.DialogPopup
 import com.github.damontecres.wholphin.ui.setup.ServerConnectionStatus
@@ -90,6 +91,11 @@ fun TallyServerPicker(
 
     when (step) {
         ServerStep.List -> {
+            // Opened from the app (through its user list): BACK goes back to that list instead of leaving the app.
+            val returnTo = TallySetupReturn.returnSession(viewModel.serverRepository)
+            BackHandler(enabled = returnTo != null) {
+                returnTo?.let { viewModel.navigationManager.navigateTo(SetupDestination.UserList(it.server)) }
+            }
             TallySetupFrame(kicker = stringResource(R.string.tally_signin_kicker_server), modifier = modifier) {
                 if (state.loading == LoadingState.Success) {
                     ServerList(
